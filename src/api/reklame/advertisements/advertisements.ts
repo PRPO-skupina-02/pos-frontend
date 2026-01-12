@@ -7,53 +7,54 @@
  */
 import { useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
 
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
-
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
 
 import type { MiddlewareHttpError, ReklameMovieWithTimeslots } from '.././model'
 
+import { reklameMutator } from '../../reklame-mutator'
+
 /**
  * Get a list of movies and their showing times for tomorrow for a specific theater
  * @summary Get advertisements
  */
-export const getAdvertisements = (
-  theaterID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ReklameMovieWithTimeslots[]>> => {
+export const getAdvertisements = (theaterID: MaybeRef<string>, signal?: AbortSignal) => {
   theaterID = unref(theaterID)
 
-  return axios.default.get(`/advertisements/${theaterID}`, options)
+  return reklameMutator<ReklameMovieWithTimeslots[]>({
+    url: `/api/v1/reklame/advertisements/${theaterID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getGetAdvertisementsQueryKey = (theaterID?: MaybeRef<string>) => {
-  return ['advertisements', theaterID] as const
+  return ['api', 'v1', 'reklame', 'advertisements', theaterID] as const
 }
 
 export const getGetAdvertisementsQueryOptions = <
   TData = Awaited<ReturnType<typeof getAdvertisements>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvertisements>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdvertisements>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getGetAdvertisementsQueryKey(theaterID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdvertisements>>> = ({ signal }) =>
-    getAdvertisements(theaterID, { signal, ...axiosOptions })
+    getAdvertisements(theaterID, signal)
 
   return {
     queryKey,
@@ -66,7 +67,7 @@ export const getGetAdvertisementsQueryOptions = <
 export type GetAdvertisementsQueryResult = NonNullable<
   Awaited<ReturnType<typeof getAdvertisements>>
 >
-export type GetAdvertisementsQueryError = AxiosError<MiddlewareHttpError>
+export type GetAdvertisementsQueryError = MiddlewareHttpError
 
 /**
  * @summary Get advertisements
@@ -74,19 +75,21 @@ export type GetAdvertisementsQueryError = AxiosError<MiddlewareHttpError>
 
 export function useGetAdvertisements<
   TData = Awaited<ReturnType<typeof getAdvertisements>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof getAdvertisements>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdvertisements>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getGetAdvertisementsQueryOptions(theaterID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }

@@ -7,14 +7,13 @@
  */
 import { useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -26,6 +25,8 @@ import type {
   TimeSlotsListParams,
 } from '.././model'
 
+import { sporedMutator } from '../../spored-mutator'
+
 /**
  * List time slots
  * @summary List time slots
@@ -34,15 +35,17 @@ export const timeSlotsList = (
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   params?: MaybeRef<TimeSlotsListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<TimeSlotsList200>> => {
+  signal?: AbortSignal,
+) => {
   theaterID = unref(theaterID)
   roomID = unref(roomID)
   params = unref(params)
 
-  return axios.default.get(`/theaters/${theaterID}/rooms/${roomID}/timeslots`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return sporedMutator<TimeSlotsList200>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms/${roomID}/timeslots`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
@@ -51,27 +54,36 @@ export const getTimeSlotsListQueryKey = (
   roomID?: MaybeRef<string>,
   params?: MaybeRef<TimeSlotsListParams>,
 ) => {
-  return ['theaters', theaterID, 'rooms', roomID, 'timeslots', ...(params ? [params] : [])] as const
+  return [
+    'api',
+    'v1',
+    'spored',
+    'theaters',
+    theaterID,
+    'rooms',
+    roomID,
+    'timeslots',
+    ...(params ? [params] : []),
+  ] as const
 }
 
 export const getTimeSlotsListQueryOptions = <
   TData = Awaited<ReturnType<typeof timeSlotsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   params?: MaybeRef<TimeSlotsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof timeSlotsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof timeSlotsList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getTimeSlotsListQueryKey(theaterID, roomID, params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof timeSlotsList>>> = ({ signal }) =>
-    timeSlotsList(theaterID, roomID, params, { signal, ...axiosOptions })
+    timeSlotsList(theaterID, roomID, params, signal)
 
   return {
     queryKey,
@@ -82,7 +94,7 @@ export const getTimeSlotsListQueryOptions = <
 }
 
 export type TimeSlotsListQueryResult = NonNullable<Awaited<ReturnType<typeof timeSlotsList>>>
-export type TimeSlotsListQueryError = AxiosError<MiddlewareHttpError>
+export type TimeSlotsListQueryError = MiddlewareHttpError
 
 /**
  * @summary List time slots
@@ -90,21 +102,23 @@ export type TimeSlotsListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useTimeSlotsList<
   TData = Awaited<ReturnType<typeof timeSlotsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   params?: MaybeRef<TimeSlotsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof timeSlotsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof timeSlotsList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getTimeSlotsListQueryOptions(theaterID, roomID, params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -117,16 +131,17 @@ export const timeSlotsShow = (
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   timeSlotID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiTimeSlotResponse>> => {
+  signal?: AbortSignal,
+) => {
   theaterID = unref(theaterID)
   roomID = unref(roomID)
   timeSlotID = unref(timeSlotID)
 
-  return axios.default.get(
-    `/theaters/${theaterID}/rooms/${roomID}/timeslots/${timeSlotID}`,
-    options,
-  )
+  return sporedMutator<ApiTimeSlotResponse>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms/${roomID}/timeslots/${timeSlotID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getTimeSlotsShowQueryKey = (
@@ -134,27 +149,36 @@ export const getTimeSlotsShowQueryKey = (
   roomID?: MaybeRef<string>,
   timeSlotID?: MaybeRef<string>,
 ) => {
-  return ['theaters', theaterID, 'rooms', roomID, 'timeslots', timeSlotID] as const
+  return [
+    'api',
+    'v1',
+    'spored',
+    'theaters',
+    theaterID,
+    'rooms',
+    roomID,
+    'timeslots',
+    timeSlotID,
+  ] as const
 }
 
 export const getTimeSlotsShowQueryOptions = <
   TData = Awaited<ReturnType<typeof timeSlotsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   timeSlotID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof timeSlotsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof timeSlotsShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getTimeSlotsShowQueryKey(theaterID, roomID, timeSlotID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof timeSlotsShow>>> = ({ signal }) =>
-    timeSlotsShow(theaterID, roomID, timeSlotID, { signal, ...axiosOptions })
+    timeSlotsShow(theaterID, roomID, timeSlotID, signal)
 
   return {
     queryKey,
@@ -165,7 +189,7 @@ export const getTimeSlotsShowQueryOptions = <
 }
 
 export type TimeSlotsShowQueryResult = NonNullable<Awaited<ReturnType<typeof timeSlotsShow>>>
-export type TimeSlotsShowQueryError = AxiosError<MiddlewareHttpError>
+export type TimeSlotsShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Show time slot
@@ -173,21 +197,23 @@ export type TimeSlotsShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function useTimeSlotsShow<
   TData = Awaited<ReturnType<typeof timeSlotsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   timeSlotID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof timeSlotsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof timeSlotsShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getTimeSlotsShowQueryOptions(theaterID, roomID, timeSlotID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }

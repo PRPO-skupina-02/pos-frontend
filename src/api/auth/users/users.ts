@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -30,42 +29,42 @@ import type {
   UsersListParams,
 } from '.././model'
 
+import { authMutator } from '../../auth-mutator'
+
 /**
  * List all users (admin endpoint)
  * @summary List users
  */
-export const usersList = (
-  params?: MaybeRef<UsersListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse[]>> => {
+export const usersList = (params?: MaybeRef<UsersListParams>, signal?: AbortSignal) => {
   params = unref(params)
 
-  return axios.default.get(`/users`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return authMutator<ApiUserResponse[]>({
+    url: `/api/v1/auth/users`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
 export const getUsersListQueryKey = (params?: MaybeRef<UsersListParams>) => {
-  return ['users', ...(params ? [params] : [])] as const
+  return ['api', 'v1', 'auth', 'users', ...(params ? [params] : [])] as const
 }
 
 export const getUsersListQueryOptions = <
   TData = Awaited<ReturnType<typeof usersList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<UsersListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof usersList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof usersList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getUsersListQueryKey(params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof usersList>>> = ({ signal }) =>
-    usersList(params, { signal, ...axiosOptions })
+    usersList(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof usersList>>,
@@ -75,7 +74,7 @@ export const getUsersListQueryOptions = <
 }
 
 export type UsersListQueryResult = NonNullable<Awaited<ReturnType<typeof usersList>>>
-export type UsersListQueryError = AxiosError<MiddlewareHttpError>
+export type UsersListQueryError = MiddlewareHttpError
 
 /**
  * @summary List users
@@ -83,19 +82,21 @@ export type UsersListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useUsersList<
   TData = Awaited<ReturnType<typeof usersList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<UsersListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof usersList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof usersList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getUsersListQueryOptions(params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -106,15 +107,21 @@ export function useUsersList<
  */
 export const adminCreateUser = (
   apiAdminCreateUserRequest: MaybeRef<ApiAdminCreateUserRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+  signal?: AbortSignal,
+) => {
   apiAdminCreateUserRequest = unref(apiAdminCreateUserRequest)
 
-  return axios.default.post(`/users`, apiAdminCreateUserRequest, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/users`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiAdminCreateUserRequest,
+    signal,
+  })
 }
 
 export const getAdminCreateUserMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -123,7 +130,6 @@ export const getAdminCreateUserMutationOptions = <
     { data: ApiAdminCreateUserRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof adminCreateUser>>,
   TError,
@@ -131,11 +137,11 @@ export const getAdminCreateUserMutationOptions = <
   TContext
 > => {
   const mutationKey = ['adminCreateUser']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof adminCreateUser>>,
@@ -143,7 +149,7 @@ export const getAdminCreateUserMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return adminCreateUser(data, axiosOptions)
+    return adminCreateUser(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -151,23 +157,22 @@ export const getAdminCreateUserMutationOptions = <
 
 export type AdminCreateUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminCreateUser>>>
 export type AdminCreateUserMutationBody = ApiAdminCreateUserRequest
-export type AdminCreateUserMutationError = AxiosError<MiddlewareHttpError>
+export type AdminCreateUserMutationError = MiddlewareHttpError
 
 /**
  * @summary Create user (admin)
  */
-export const useAdminCreateUser = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof adminCreateUser>>,
-    TError,
-    { data: ApiAdminCreateUserRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useAdminCreateUser = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof adminCreateUser>>,
+      TError,
+      { data: ApiAdminCreateUserRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof adminCreateUser>>,
   TError,
   { data: ApiAdminCreateUserRequest },
@@ -175,23 +180,20 @@ export const useAdminCreateUser = <
 > => {
   const mutationOptions = getAdminCreateUserMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Delete a specific user (admin endpoint)
  * @summary Delete user
  */
-export const usersDelete = (
-  userID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
+export const usersDelete = (userID: MaybeRef<string>) => {
   userID = unref(userID)
 
-  return axios.default.delete(`/users/${userID}`, options)
+  return authMutator<void>({ url: `/api/v1/auth/users/${userID}`, method: 'DELETE' })
 }
 
 export const getUsersDeleteMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -200,7 +202,6 @@ export const getUsersDeleteMutationOptions = <
     { userID: string },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof usersDelete>>,
   TError,
@@ -208,11 +209,11 @@ export const getUsersDeleteMutationOptions = <
   TContext
 > => {
   const mutationKey = ['usersDelete']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof usersDelete>>,
@@ -220,7 +221,7 @@ export const getUsersDeleteMutationOptions = <
   > = (props) => {
     const { userID } = props ?? {}
 
-    return usersDelete(userID, axiosOptions)
+    return usersDelete(userID)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -228,23 +229,22 @@ export const getUsersDeleteMutationOptions = <
 
 export type UsersDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof usersDelete>>>
 
-export type UsersDeleteMutationError = AxiosError<MiddlewareHttpError>
+export type UsersDeleteMutationError = MiddlewareHttpError
 
 /**
  * @summary Delete user
  */
-export const useUsersDelete = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof usersDelete>>,
-    TError,
-    { userID: string },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useUsersDelete = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof usersDelete>>,
+      TError,
+      { userID: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof usersDelete>>,
   TError,
   { userID: string },
@@ -252,41 +252,41 @@ export const useUsersDelete = <
 > => {
   const mutationOptions = getUsersDeleteMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Get a specific user by ID (admin endpoint)
  * @summary Get user by ID
  */
-export const usersShow = (
-  userID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+export const usersShow = (userID: MaybeRef<string>, signal?: AbortSignal) => {
   userID = unref(userID)
 
-  return axios.default.get(`/users/${userID}`, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/users/${userID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getUsersShowQueryKey = (userID?: MaybeRef<string>) => {
-  return ['users', userID] as const
+  return ['api', 'v1', 'auth', 'users', userID] as const
 }
 
 export const getUsersShowQueryOptions = <
   TData = Awaited<ReturnType<typeof usersShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   userID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof usersShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof usersShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getUsersShowQueryKey(userID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof usersShow>>> = ({ signal }) =>
-    usersShow(userID, { signal, ...axiosOptions })
+    usersShow(userID, signal)
 
   return {
     queryKey,
@@ -297,7 +297,7 @@ export const getUsersShowQueryOptions = <
 }
 
 export type UsersShowQueryResult = NonNullable<Awaited<ReturnType<typeof usersShow>>>
-export type UsersShowQueryError = AxiosError<MiddlewareHttpError>
+export type UsersShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Get user by ID
@@ -305,19 +305,21 @@ export type UsersShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function useUsersShow<
   TData = Awaited<ReturnType<typeof usersShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   userID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof usersShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof usersShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getUsersShowQueryOptions(userID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -329,16 +331,20 @@ export function useUsersShow<
 export const usersUpdate = (
   userID: MaybeRef<string>,
   apiAdminUpdateUserRequest: MaybeRef<ApiAdminUpdateUserRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+) => {
   userID = unref(userID)
   apiAdminUpdateUserRequest = unref(apiAdminUpdateUserRequest)
 
-  return axios.default.put(`/users/${userID}`, apiAdminUpdateUserRequest, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/users/${userID}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiAdminUpdateUserRequest,
+  })
 }
 
 export const getUsersUpdateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -347,7 +353,6 @@ export const getUsersUpdateMutationOptions = <
     { userID: string; data: ApiAdminUpdateUserRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof usersUpdate>>,
   TError,
@@ -355,11 +360,11 @@ export const getUsersUpdateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['usersUpdate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof usersUpdate>>,
@@ -367,7 +372,7 @@ export const getUsersUpdateMutationOptions = <
   > = (props) => {
     const { userID, data } = props ?? {}
 
-    return usersUpdate(userID, data, axiosOptions)
+    return usersUpdate(userID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -375,23 +380,22 @@ export const getUsersUpdateMutationOptions = <
 
 export type UsersUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof usersUpdate>>>
 export type UsersUpdateMutationBody = ApiAdminUpdateUserRequest
-export type UsersUpdateMutationError = AxiosError<MiddlewareHttpError>
+export type UsersUpdateMutationError = MiddlewareHttpError
 
 /**
  * @summary Update user
  */
-export const useUsersUpdate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof usersUpdate>>,
-    TError,
-    { userID: string; data: ApiAdminUpdateUserRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useUsersUpdate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof usersUpdate>>,
+      TError,
+      { userID: string; data: ApiAdminUpdateUserRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof usersUpdate>>,
   TError,
   { userID: string; data: ApiAdminUpdateUserRequest },
@@ -399,5 +403,5 @@ export const useUsersUpdate = <
 > => {
   const mutationOptions = getUsersUpdateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
