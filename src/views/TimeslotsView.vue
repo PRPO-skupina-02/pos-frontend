@@ -74,9 +74,12 @@ const tomorrowString = tomorrow.toISOString().split('T')[0];
 const dayAfterTomorrowString = dayAfterTomorrow.toISOString().split('T')[0];
 
 // Fetch timeslots for each day
-const todayQuery = useTimeSlotsList(theaterId, roomId, { date: todayString });
-const tomorrowQuery = useTimeSlotsList(theaterId, roomId, { date: tomorrowString });
-const dayAfterQuery = useTimeSlotsList(theaterId, roomId, { date: dayAfterTomorrowString });
+const todayQuery = useTimeSlotsList(theaterId, roomId, { date: todayString, limit: 50 });
+const tomorrowQuery = useTimeSlotsList(theaterId, roomId, { date: tomorrowString, limit: 50 });
+const dayAfterQuery = useTimeSlotsList(theaterId, roomId, {
+  date: dayAfterTomorrowString,
+  limit: 50,
+});
 
 const movieQuery = useMoviesList();
 

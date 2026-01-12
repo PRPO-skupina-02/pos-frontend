@@ -20,9 +20,9 @@ const router = createRouter({
       component: () => import('../views/TimeslotsView.vue'),
     },
     {
-      path: '/reservations/:reservationId/purchases',
-      name: 'purchases',
-      component: () => import('../views/PurchasesView.vue'),
+      path: '/theaters/:theaterId/rooms/:roomId/timeslots/:timeslotId',
+      name: 'timeslot-details',
+      component: () => import('../views/TimeslotDetailsView.vue'),
     },
   ],
 })
