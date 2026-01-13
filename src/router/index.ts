@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import TheatersView from '../views/TheatersView.vue';
+import { createRouter, createWebHistory } from 'vue-router'
+import TheatersView from '../views/TheatersView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +32,12 @@ const router = createRouter({
       path: '/theaters/:theaterId/rooms/:roomId/timeslots/:timeslotId',
       name: 'timeslot-details',
       component: () => import('../views/TimeslotDetailsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/reservations/:reservationId/purchases',
+      name: 'purchases',
+      component: () => import('../views/PurchasesView.vue'),
       meta: { requiresAuth: true },
     },
   ],
