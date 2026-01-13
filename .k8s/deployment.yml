@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: pos-frontend
-        image: ghcr.io/OWNER/pos-frontend:latest
+        image: ghcr.io/prpo-skupina-02/pos-frontend:latest
         ports:
         - containerPort: 80
           name: http
