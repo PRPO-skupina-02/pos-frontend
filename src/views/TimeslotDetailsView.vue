@@ -79,8 +79,7 @@
                                         'btn-danger': isSeatReserved(row, col),
                                         'btn-success': isSeatSelected(row, col),
                                     },
-                                ]" :disabled="isSeatReserved(row, col)" @click="toggleSeat(row, col)"
-                                    style="width: 40px; height: 40px; font-size: 12px; padding: 0">
+                                ]" @click="toggleSeat(row, col)" style="width: 40px; height: 40px; font-size: 12px; padding: 0">
                                     {{ col }}
                                 </button>
                             </div>
@@ -104,7 +103,8 @@
                                 </span>
                             </div>
                             <button class="btn btn-success btn-sm w-100"
-                                :disabled="createReservationMutation.isPending.value" @click="createReservations">
+                                :disabled="createReservationMutation.isPending.value || hasReservedSeatsSelected"
+                                @click="createReservations">
                                 <span v-if="createReservationMutation.isPending.value"
                                     class="spinner-border spinner-border-sm me-2"></span>
                                 Create ({{ selectedSeats.length }})
@@ -113,33 +113,38 @@
                         </div>
 
                         <div>
-                            <h6 class="mb-2">Active Reservations</h6>
+                            <h6 class="mb-2">Selected Reservations</h6>
                             <div v-if="reservationsQuery.isLoading.value" class="text-center py-3">
                                 <div class="spinner-border spinner-border-sm" role="status">
                                     <span class="visually-hidden">Loading...</span>
                                 </div>
                             </div>
-                            <div v-else-if="activeReservations.length === 0" class="text-muted small">
-                                No reservations yet.
+                            <div v-else-if="selectedSeats.length === 0" class="text-muted small">
+                                Select a seat to view its reservation.
                             </div>
-                            <div v-else class="list-group list-group-flush">
-                                <div v-for="reservation in activeReservations" :key="reservation.id"
-                                    class="list-group-item px-0 py-2">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <strong>Seat {{ reservation.row }}-{{ reservation.col }}</strong>
-                                            <br />
-                                            <small class="text-muted">
-                                                <span class="badge bg-info">{{ reservation.type }}</span>
-                                                {{ formatTime(reservation.created_at) }}
-                                            </small>
+                            <div v-else-if="selectedReservations.length === 0" class="text-muted small">
+                                Selected seats have no reservations yet.
+                            </div>
+                            <div v-else>
+                                <div v-for="reservation in selectedReservations" :key="reservation.id"
+                                    class="card mb-2">
+                                    <div class="card-body p-2">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong>Seat {{ reservation.row }}-{{ reservation.col }}</strong>
+                                                <br />
+                                                <small class="text-muted">
+                                                    <span class="badge bg-info">{{ reservation.type }}</span>
+                                                    {{ formatTime(reservation.created_at) }}
+                                                </small>
+                                            </div>
+                                            <router-link :to="{
+                                                name: 'purchases',
+                                                params: { reservationId: reservation.id },
+                                            }" class="btn btn-sm btn-outline-primary">
+                                                Purchases
+                                            </router-link>
                                         </div>
-                                        <router-link :to="{
-                                            name: 'purchases',
-                                            params: { reservationId: reservation.id },
-                                        }" class="btn btn-sm btn-outline-primary">
-                                            Purchases
-                                        </router-link>
                                     </div>
                                 </div>
                             </div>
@@ -192,11 +197,22 @@ const isLoading = computed(
     () => timeslotQuery.isLoading.value || roomQuery.isLoading.value || theaterQuery.isLoading.value,
 );
 
+const allReservations = computed(() => {
+    return (reservationsQuery.data.value?.data || []) as ApiReservationResponse[];
+});
+
 const activeReservations = computed(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = reservationsQuery.data.value as any;
-    const allReservations = (response?.data?.data || []) as ApiReservationResponse[];
-    return allReservations.filter((r) => r.time_slot_id === timeslotId.value);
+    return allReservations.value.filter((r) => r.time_slot_id === timeslotId.value);
+});
+
+const selectedReservations = computed(() => {
+    return selectedSeats.value
+        .map((seat) => activeReservations.value.find((r) => r.row === seat.row && r.col === seat.col))
+        .filter(Boolean) as ApiReservationResponse[];
+});
+
+const hasReservedSeatsSelected = computed(() => {
+    return selectedSeats.value.some((seat) => isSeatReserved(seat.row, seat.col));
 });
 
 const selectedSeats = ref<Array<{ row: number; col: number; }>>([]);
@@ -222,7 +238,9 @@ const createReservationMutation = useReservationsCreate();
 
 async function createReservations(): Promise<void> {
     try {
-        for (const seat of selectedSeats.value) {
+        const seatsToCreate = selectedSeats.value.filter((seat) => !isSeatReserved(seat.row, seat.col));
+
+        for (const seat of seatsToCreate) {
             await createReservationMutation.mutateAsync({
                 data: {
                     row: seat.row,
