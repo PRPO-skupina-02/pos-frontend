@@ -1,7 +1,7 @@
-import { useGetCurrentUser, useLogin } from '@/api/auth/auth/auth'
-import { ModelsUserRole, type ApiUserResponse } from '@/api/auth/model'
-import { computed, ref, watchEffect } from 'vue'
-import { useRouter } from 'vue-router'
+import { useGetCurrentUser, useLogin } from '@/api/auth/auth/auth';
+import { ModelsUserRole, type ApiUserResponse } from '@/api/auth/model';
+import { computed, ref, watchEffect } from 'vue';
+import { useRouter } from 'vue-router';
 
 const TOKEN_KEY = 'auth_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -23,6 +23,10 @@ export function useAuth() {
       user.value.role === ModelsUserRole.RoleEmployee ||
       user.value.role === ModelsUserRole.RoleAdmin
     )
+  })
+
+  const isAdmin = computed(() => {
+    return user.value?.role === ModelsUserRole.RoleAdmin
   })
 
   const userQuery = useGetCurrentUser({
@@ -101,6 +105,7 @@ export function useAuth() {
   return {
     token,
     user,
+    isAdmin,
     isAuthenticated,
     hasUser,
     isAuthorized,
