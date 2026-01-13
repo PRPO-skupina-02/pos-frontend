@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -30,6 +29,8 @@ import type {
   PurchasesListParams,
 } from '.././model'
 
+import { nakupMutator } from '../../nakup-mutator'
+
 /**
  * List purchases
  * @summary List purchases
@@ -37,14 +38,16 @@ import type {
 export const purchasesList = (
   reservationID: MaybeRef<string>,
   params?: MaybeRef<PurchasesListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<PurchasesList200>> => {
+  signal?: AbortSignal,
+) => {
   reservationID = unref(reservationID)
   params = unref(params)
 
-  return axios.default.get(`/reservations/${reservationID}/purchases`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return nakupMutator<PurchasesList200>({
+    url: `/api/v1/nakup/reservations/${reservationID}/purchases`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
@@ -52,26 +55,33 @@ export const getPurchasesListQueryKey = (
   reservationID?: MaybeRef<string>,
   params?: MaybeRef<PurchasesListParams>,
 ) => {
-  return ['reservations', reservationID, 'purchases', ...(params ? [params] : [])] as const
+  return [
+    'api',
+    'v1',
+    'nakup',
+    'reservations',
+    reservationID,
+    'purchases',
+    ...(params ? [params] : []),
+  ] as const
 }
 
 export const getPurchasesListQueryOptions = <
   TData = Awaited<ReturnType<typeof purchasesList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   params?: MaybeRef<PurchasesListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof purchasesList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof purchasesList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getPurchasesListQueryKey(reservationID, params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof purchasesList>>> = ({ signal }) =>
-    purchasesList(reservationID, params, { signal, ...axiosOptions })
+    purchasesList(reservationID, params, signal)
 
   return {
     queryKey,
@@ -82,7 +92,7 @@ export const getPurchasesListQueryOptions = <
 }
 
 export type PurchasesListQueryResult = NonNullable<Awaited<ReturnType<typeof purchasesList>>>
-export type PurchasesListQueryError = AxiosError<MiddlewareHttpError>
+export type PurchasesListQueryError = MiddlewareHttpError
 
 /**
  * @summary List purchases
@@ -90,20 +100,22 @@ export type PurchasesListQueryError = AxiosError<MiddlewareHttpError>
 
 export function usePurchasesList<
   TData = Awaited<ReturnType<typeof purchasesList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   params?: MaybeRef<PurchasesListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof purchasesList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof purchasesList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getPurchasesListQueryOptions(reservationID, params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -115,20 +127,22 @@ export function usePurchasesList<
 export const purchasesCreate = (
   reservationID: MaybeRef<string>,
   apiPurchaseRequestBody: MaybeRef<ApiPurchaseRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiPurchaseResponse>> => {
+  signal?: AbortSignal,
+) => {
   reservationID = unref(reservationID)
   apiPurchaseRequestBody = unref(apiPurchaseRequestBody)
 
-  return axios.default.post(
-    `/reservations/${reservationID}/purchases`,
-    apiPurchaseRequestBody,
-    options,
-  )
+  return nakupMutator<ApiPurchaseResponse>({
+    url: `/api/v1/nakup/reservations/${reservationID}/purchases`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiPurchaseRequestBody,
+    signal,
+  })
 }
 
 export const getPurchasesCreateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -137,7 +151,6 @@ export const getPurchasesCreateMutationOptions = <
     { reservationID: string; data: ApiPurchaseRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof purchasesCreate>>,
   TError,
@@ -145,11 +158,11 @@ export const getPurchasesCreateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['purchasesCreate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof purchasesCreate>>,
@@ -157,7 +170,7 @@ export const getPurchasesCreateMutationOptions = <
   > = (props) => {
     const { reservationID, data } = props ?? {}
 
-    return purchasesCreate(reservationID, data, axiosOptions)
+    return purchasesCreate(reservationID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -165,23 +178,22 @@ export const getPurchasesCreateMutationOptions = <
 
 export type PurchasesCreateMutationResult = NonNullable<Awaited<ReturnType<typeof purchasesCreate>>>
 export type PurchasesCreateMutationBody = ApiPurchaseRequestBody
-export type PurchasesCreateMutationError = AxiosError<MiddlewareHttpError>
+export type PurchasesCreateMutationError = MiddlewareHttpError
 
 /**
  * @summary Create purchase
  */
-export const usePurchasesCreate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof purchasesCreate>>,
-    TError,
-    { reservationID: string; data: ApiPurchaseRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const usePurchasesCreate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof purchasesCreate>>,
+      TError,
+      { reservationID: string; data: ApiPurchaseRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof purchasesCreate>>,
   TError,
   { reservationID: string; data: ApiPurchaseRequestBody },
@@ -189,25 +201,24 @@ export const usePurchasesCreate = <
 > => {
   const mutationOptions = getPurchasesCreateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Delete purchase
  * @summary Delete purchase
  */
-export const purchasesDelete = (
-  reservationID: MaybeRef<string>,
-  purchaseID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
+export const purchasesDelete = (reservationID: MaybeRef<string>, purchaseID: MaybeRef<string>) => {
   reservationID = unref(reservationID)
   purchaseID = unref(purchaseID)
 
-  return axios.default.delete(`/reservations/${reservationID}/purchases/${purchaseID}`, options)
+  return nakupMutator<void>({
+    url: `/api/v1/nakup/reservations/${reservationID}/purchases/${purchaseID}`,
+    method: 'DELETE',
+  })
 }
 
 export const getPurchasesDeleteMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -216,7 +227,6 @@ export const getPurchasesDeleteMutationOptions = <
     { reservationID: string; purchaseID: string },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof purchasesDelete>>,
   TError,
@@ -224,11 +234,11 @@ export const getPurchasesDeleteMutationOptions = <
   TContext
 > => {
   const mutationKey = ['purchasesDelete']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof purchasesDelete>>,
@@ -236,7 +246,7 @@ export const getPurchasesDeleteMutationOptions = <
   > = (props) => {
     const { reservationID, purchaseID } = props ?? {}
 
-    return purchasesDelete(reservationID, purchaseID, axiosOptions)
+    return purchasesDelete(reservationID, purchaseID)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -244,23 +254,22 @@ export const getPurchasesDeleteMutationOptions = <
 
 export type PurchasesDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof purchasesDelete>>>
 
-export type PurchasesDeleteMutationError = AxiosError<MiddlewareHttpError>
+export type PurchasesDeleteMutationError = MiddlewareHttpError
 
 /**
  * @summary Delete purchase
  */
-export const usePurchasesDelete = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof purchasesDelete>>,
-    TError,
-    { reservationID: string; purchaseID: string },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const usePurchasesDelete = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof purchasesDelete>>,
+      TError,
+      { reservationID: string; purchaseID: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof purchasesDelete>>,
   TError,
   { reservationID: string; purchaseID: string },
@@ -268,7 +277,7 @@ export const usePurchasesDelete = <
 > => {
   const mutationOptions = getPurchasesDeleteMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Show purchase
@@ -277,38 +286,41 @@ export const usePurchasesDelete = <
 export const purchasesShow = (
   reservationID: MaybeRef<string>,
   purchaseID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiPurchaseResponse>> => {
+  signal?: AbortSignal,
+) => {
   reservationID = unref(reservationID)
   purchaseID = unref(purchaseID)
 
-  return axios.default.get(`/reservations/${reservationID}/purchases/${purchaseID}`, options)
+  return nakupMutator<ApiPurchaseResponse>({
+    url: `/api/v1/nakup/reservations/${reservationID}/purchases/${purchaseID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getPurchasesShowQueryKey = (
   reservationID?: MaybeRef<string>,
   purchaseID?: MaybeRef<string>,
 ) => {
-  return ['reservations', reservationID, 'purchases', purchaseID] as const
+  return ['api', 'v1', 'nakup', 'reservations', reservationID, 'purchases', purchaseID] as const
 }
 
 export const getPurchasesShowQueryOptions = <
   TData = Awaited<ReturnType<typeof purchasesShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   purchaseID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof purchasesShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof purchasesShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getPurchasesShowQueryKey(reservationID, purchaseID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof purchasesShow>>> = ({ signal }) =>
-    purchasesShow(reservationID, purchaseID, { signal, ...axiosOptions })
+    purchasesShow(reservationID, purchaseID, signal)
 
   return {
     queryKey,
@@ -319,7 +331,7 @@ export const getPurchasesShowQueryOptions = <
 }
 
 export type PurchasesShowQueryResult = NonNullable<Awaited<ReturnType<typeof purchasesShow>>>
-export type PurchasesShowQueryError = AxiosError<MiddlewareHttpError>
+export type PurchasesShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Show purchase
@@ -327,20 +339,22 @@ export type PurchasesShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function usePurchasesShow<
   TData = Awaited<ReturnType<typeof purchasesShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   purchaseID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof purchasesShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof purchasesShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getPurchasesShowQueryOptions(reservationID, purchaseID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -353,21 +367,21 @@ export const purchasesUpdate = (
   reservationID: MaybeRef<string>,
   purchaseID: MaybeRef<string>,
   apiPurchaseRequestBody: MaybeRef<ApiPurchaseRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiPurchaseResponse>> => {
+) => {
   reservationID = unref(reservationID)
   purchaseID = unref(purchaseID)
   apiPurchaseRequestBody = unref(apiPurchaseRequestBody)
 
-  return axios.default.put(
-    `/reservations/${reservationID}/purchases/${purchaseID}`,
-    apiPurchaseRequestBody,
-    options,
-  )
+  return nakupMutator<ApiPurchaseResponse>({
+    url: `/api/v1/nakup/reservations/${reservationID}/purchases/${purchaseID}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiPurchaseRequestBody,
+  })
 }
 
 export const getPurchasesUpdateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -376,7 +390,6 @@ export const getPurchasesUpdateMutationOptions = <
     { reservationID: string; purchaseID: string; data: ApiPurchaseRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof purchasesUpdate>>,
   TError,
@@ -384,11 +397,11 @@ export const getPurchasesUpdateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['purchasesUpdate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof purchasesUpdate>>,
@@ -396,7 +409,7 @@ export const getPurchasesUpdateMutationOptions = <
   > = (props) => {
     const { reservationID, purchaseID, data } = props ?? {}
 
-    return purchasesUpdate(reservationID, purchaseID, data, axiosOptions)
+    return purchasesUpdate(reservationID, purchaseID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -404,23 +417,22 @@ export const getPurchasesUpdateMutationOptions = <
 
 export type PurchasesUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof purchasesUpdate>>>
 export type PurchasesUpdateMutationBody = ApiPurchaseRequestBody
-export type PurchasesUpdateMutationError = AxiosError<MiddlewareHttpError>
+export type PurchasesUpdateMutationError = MiddlewareHttpError
 
 /**
  * @summary Update purchase
  */
-export const usePurchasesUpdate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof purchasesUpdate>>,
-    TError,
-    { reservationID: string; purchaseID: string; data: ApiPurchaseRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const usePurchasesUpdate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof purchasesUpdate>>,
+      TError,
+      { reservationID: string; purchaseID: string; data: ApiPurchaseRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof purchasesUpdate>>,
   TError,
   { reservationID: string; purchaseID: string; data: ApiPurchaseRequestBody },
@@ -428,5 +440,5 @@ export const usePurchasesUpdate = <
 > => {
   const mutationOptions = getPurchasesUpdateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }

@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -30,6 +29,8 @@ import type {
   RoomsListParams,
 } from '.././model'
 
+import { sporedMutator } from '../../spored-mutator'
+
 /**
  * List rooms
  * @summary List rooms
@@ -37,14 +38,16 @@ import type {
 export const roomsList = (
   theaterID: MaybeRef<string>,
   params?: MaybeRef<RoomsListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<RoomsList200>> => {
+  signal?: AbortSignal,
+) => {
   theaterID = unref(theaterID)
   params = unref(params)
 
-  return axios.default.get(`/theaters/${theaterID}/rooms`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return sporedMutator<RoomsList200>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
@@ -52,26 +55,33 @@ export const getRoomsListQueryKey = (
   theaterID?: MaybeRef<string>,
   params?: MaybeRef<RoomsListParams>,
 ) => {
-  return ['theaters', theaterID, 'rooms', ...(params ? [params] : [])] as const
+  return [
+    'api',
+    'v1',
+    'spored',
+    'theaters',
+    theaterID,
+    'rooms',
+    ...(params ? [params] : []),
+  ] as const
 }
 
 export const getRoomsListQueryOptions = <
   TData = Awaited<ReturnType<typeof roomsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   params?: MaybeRef<RoomsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof roomsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof roomsList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getRoomsListQueryKey(theaterID, params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof roomsList>>> = ({ signal }) =>
-    roomsList(theaterID, params, { signal, ...axiosOptions })
+    roomsList(theaterID, params, signal)
 
   return {
     queryKey,
@@ -82,7 +92,7 @@ export const getRoomsListQueryOptions = <
 }
 
 export type RoomsListQueryResult = NonNullable<Awaited<ReturnType<typeof roomsList>>>
-export type RoomsListQueryError = AxiosError<MiddlewareHttpError>
+export type RoomsListQueryError = MiddlewareHttpError
 
 /**
  * @summary List rooms
@@ -90,20 +100,22 @@ export type RoomsListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useRoomsList<
   TData = Awaited<ReturnType<typeof roomsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   params?: MaybeRef<RoomsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof roomsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof roomsList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getRoomsListQueryOptions(theaterID, params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -115,16 +127,22 @@ export function useRoomsList<
 export const roomsCreate = (
   theaterID: MaybeRef<string>,
   apiRoomRequestBody: MaybeRef<ApiRoomRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiRoomResponse>> => {
+  signal?: AbortSignal,
+) => {
   theaterID = unref(theaterID)
   apiRoomRequestBody = unref(apiRoomRequestBody)
 
-  return axios.default.post(`/theaters/${theaterID}/rooms`, apiRoomRequestBody, options)
+  return sporedMutator<ApiRoomResponse>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiRoomRequestBody,
+    signal,
+  })
 }
 
 export const getRoomsCreateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -133,7 +151,6 @@ export const getRoomsCreateMutationOptions = <
     { theaterID: string; data: ApiRoomRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof roomsCreate>>,
   TError,
@@ -141,11 +158,11 @@ export const getRoomsCreateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['roomsCreate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof roomsCreate>>,
@@ -153,7 +170,7 @@ export const getRoomsCreateMutationOptions = <
   > = (props) => {
     const { theaterID, data } = props ?? {}
 
-    return roomsCreate(theaterID, data, axiosOptions)
+    return roomsCreate(theaterID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -161,23 +178,22 @@ export const getRoomsCreateMutationOptions = <
 
 export type RoomsCreateMutationResult = NonNullable<Awaited<ReturnType<typeof roomsCreate>>>
 export type RoomsCreateMutationBody = ApiRoomRequestBody
-export type RoomsCreateMutationError = AxiosError<MiddlewareHttpError>
+export type RoomsCreateMutationError = MiddlewareHttpError
 
 /**
  * @summary Create room
  */
-export const useRoomsCreate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof roomsCreate>>,
-    TError,
-    { theaterID: string; data: ApiRoomRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useRoomsCreate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof roomsCreate>>,
+      TError,
+      { theaterID: string; data: ApiRoomRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof roomsCreate>>,
   TError,
   { theaterID: string; data: ApiRoomRequestBody },
@@ -185,25 +201,24 @@ export const useRoomsCreate = <
 > => {
   const mutationOptions = getRoomsCreateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Delete room
  * @summary Delete room
  */
-export const roomsDelete = (
-  theaterID: MaybeRef<string>,
-  roomID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
+export const roomsDelete = (theaterID: MaybeRef<string>, roomID: MaybeRef<string>) => {
   theaterID = unref(theaterID)
   roomID = unref(roomID)
 
-  return axios.default.delete(`/theaters/${theaterID}/rooms/${roomID}`, options)
+  return sporedMutator<void>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms/${roomID}`,
+    method: 'DELETE',
+  })
 }
 
 export const getRoomsDeleteMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -212,7 +227,6 @@ export const getRoomsDeleteMutationOptions = <
     { theaterID: string; roomID: string },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof roomsDelete>>,
   TError,
@@ -220,11 +234,11 @@ export const getRoomsDeleteMutationOptions = <
   TContext
 > => {
   const mutationKey = ['roomsDelete']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof roomsDelete>>,
@@ -232,7 +246,7 @@ export const getRoomsDeleteMutationOptions = <
   > = (props) => {
     const { theaterID, roomID } = props ?? {}
 
-    return roomsDelete(theaterID, roomID, axiosOptions)
+    return roomsDelete(theaterID, roomID)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -240,23 +254,22 @@ export const getRoomsDeleteMutationOptions = <
 
 export type RoomsDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof roomsDelete>>>
 
-export type RoomsDeleteMutationError = AxiosError<MiddlewareHttpError>
+export type RoomsDeleteMutationError = MiddlewareHttpError
 
 /**
  * @summary Delete room
  */
-export const useRoomsDelete = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof roomsDelete>>,
-    TError,
-    { theaterID: string; roomID: string },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useRoomsDelete = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof roomsDelete>>,
+      TError,
+      { theaterID: string; roomID: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof roomsDelete>>,
   TError,
   { theaterID: string; roomID: string },
@@ -264,7 +277,7 @@ export const useRoomsDelete = <
 > => {
   const mutationOptions = getRoomsDeleteMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Show room
@@ -273,35 +286,38 @@ export const useRoomsDelete = <
 export const roomsShow = (
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiRoomResponse>> => {
+  signal?: AbortSignal,
+) => {
   theaterID = unref(theaterID)
   roomID = unref(roomID)
 
-  return axios.default.get(`/theaters/${theaterID}/rooms/${roomID}`, options)
+  return sporedMutator<ApiRoomResponse>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms/${roomID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getRoomsShowQueryKey = (theaterID?: MaybeRef<string>, roomID?: MaybeRef<string>) => {
-  return ['theaters', theaterID, 'rooms', roomID] as const
+  return ['api', 'v1', 'spored', 'theaters', theaterID, 'rooms', roomID] as const
 }
 
 export const getRoomsShowQueryOptions = <
   TData = Awaited<ReturnType<typeof roomsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof roomsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof roomsShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getRoomsShowQueryKey(theaterID, roomID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof roomsShow>>> = ({ signal }) =>
-    roomsShow(theaterID, roomID, { signal, ...axiosOptions })
+    roomsShow(theaterID, roomID, signal)
 
   return {
     queryKey,
@@ -312,7 +328,7 @@ export const getRoomsShowQueryOptions = <
 }
 
 export type RoomsShowQueryResult = NonNullable<Awaited<ReturnType<typeof roomsShow>>>
-export type RoomsShowQueryError = AxiosError<MiddlewareHttpError>
+export type RoomsShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Show room
@@ -320,20 +336,22 @@ export type RoomsShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function useRoomsShow<
   TData = Awaited<ReturnType<typeof roomsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof roomsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof roomsShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getRoomsShowQueryOptions(theaterID, roomID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -346,17 +364,21 @@ export const roomsUpdate = (
   theaterID: MaybeRef<string>,
   roomID: MaybeRef<string>,
   apiRoomRequestBody: MaybeRef<ApiRoomRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiRoomResponse>> => {
+) => {
   theaterID = unref(theaterID)
   roomID = unref(roomID)
   apiRoomRequestBody = unref(apiRoomRequestBody)
 
-  return axios.default.put(`/theaters/${theaterID}/rooms/${roomID}`, apiRoomRequestBody, options)
+  return sporedMutator<ApiRoomResponse>({
+    url: `/api/v1/spored/theaters/${theaterID}/rooms/${roomID}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiRoomRequestBody,
+  })
 }
 
 export const getRoomsUpdateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -365,7 +387,6 @@ export const getRoomsUpdateMutationOptions = <
     { theaterID: string; roomID: string; data: ApiRoomRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof roomsUpdate>>,
   TError,
@@ -373,11 +394,11 @@ export const getRoomsUpdateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['roomsUpdate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof roomsUpdate>>,
@@ -385,7 +406,7 @@ export const getRoomsUpdateMutationOptions = <
   > = (props) => {
     const { theaterID, roomID, data } = props ?? {}
 
-    return roomsUpdate(theaterID, roomID, data, axiosOptions)
+    return roomsUpdate(theaterID, roomID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -393,23 +414,22 @@ export const getRoomsUpdateMutationOptions = <
 
 export type RoomsUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof roomsUpdate>>>
 export type RoomsUpdateMutationBody = ApiRoomRequestBody
-export type RoomsUpdateMutationError = AxiosError<MiddlewareHttpError>
+export type RoomsUpdateMutationError = MiddlewareHttpError
 
 /**
  * @summary Update room
  */
-export const useRoomsUpdate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof roomsUpdate>>,
-    TError,
-    { theaterID: string; roomID: string; data: ApiRoomRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useRoomsUpdate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof roomsUpdate>>,
+      TError,
+      { theaterID: string; roomID: string; data: ApiRoomRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof roomsUpdate>>,
   TError,
   { theaterID: string; roomID: string; data: ApiRoomRequestBody },
@@ -417,5 +437,5 @@ export const useRoomsUpdate = <
 > => {
   const mutationOptions = getRoomsUpdateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }

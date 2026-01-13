@@ -10,7 +10,14 @@ export default defineConfig({
       target: 'src/api/auth',
       schemas: 'src/api/auth/model',
       client: 'vue-query',
+      baseUrl: '/api/v1/auth',
       mock: true,
+      override: {
+        mutator: {
+          path: 'src/api/auth-mutator.ts',
+          name: 'authMutator',
+        },
+      },
     },
     hooks: {
       afterAllFilesWrite: 'prettier --write',
@@ -26,7 +33,14 @@ export default defineConfig({
       target: 'src/api/nakup',
       schemas: 'src/api/nakup/model',
       client: 'vue-query',
+      baseUrl: '/api/v1/nakup',
       mock: true,
+      override: {
+        mutator: {
+          path: 'src/api/nakup-mutator.ts',
+          name: 'nakupMutator',
+        },
+      },
     },
     hooks: {
       afterAllFilesWrite: 'prettier --write',
@@ -42,7 +56,14 @@ export default defineConfig({
       target: 'src/api/spored',
       schemas: 'src/api/spored/model',
       client: 'vue-query',
+      baseUrl: '/api/v1/spored',
       mock: true,
+      override: {
+        mutator: {
+          path: 'src/api/spored-mutator.ts',
+          name: 'sporedMutator',
+        },
+      },
     },
     hooks: {
       afterAllFilesWrite: 'prettier --write',
@@ -58,7 +79,14 @@ export default defineConfig({
       target: 'src/api/reklame',
       schemas: 'src/api/reklame/model',
       client: 'vue-query',
+      baseUrl: '/api/v1/reklame',
       mock: true,
+      override: {
+        mutator: {
+          path: 'src/api/reklame-mutator.ts',
+          name: 'reklameMutator',
+        },
+      },
     },
     hooks: {
       afterAllFilesWrite: 'prettier --write',

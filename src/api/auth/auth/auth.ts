@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -35,21 +34,26 @@ import type {
   VerifyTokenBody,
 } from '.././model'
 
+import { authMutator } from '../../auth-mutator'
+
 /**
  * Authenticate user and return JWT tokens
  * @summary Login user
  */
-export const login = (
-  apiLoginRequest: MaybeRef<ApiLoginRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiTokenResponse>> => {
+export const login = (apiLoginRequest: MaybeRef<ApiLoginRequest>, signal?: AbortSignal) => {
   apiLoginRequest = unref(apiLoginRequest)
 
-  return axios.default.post(`/login`, apiLoginRequest, options)
+  return authMutator<ApiTokenResponse>({
+    url: `/api/v1/auth/login`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiLoginRequest,
+    signal,
+  })
 }
 
 export const getLoginMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -58,7 +62,6 @@ export const getLoginMutationOptions = <
     { data: ApiLoginRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof login>>,
   TError,
@@ -66,11 +69,11 @@ export const getLoginMutationOptions = <
   TContext
 > => {
   const mutationKey = ['login']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof login>>,
@@ -78,7 +81,7 @@ export const getLoginMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return login(data, axiosOptions)
+    return login(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -86,20 +89,22 @@ export const getLoginMutationOptions = <
 
 export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>
 export type LoginMutationBody = ApiLoginRequest
-export type LoginMutationError = AxiosError<MiddlewareHttpError>
+export type LoginMutationError = MiddlewareHttpError
 
 /**
  * @summary Login user
  */
-export const useLogin = <TError = AxiosError<MiddlewareHttpError>, TContext = unknown>(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof login>>,
-    TError,
-    { data: ApiLoginRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useLogin = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof login>>,
+      TError,
+      { data: ApiLoginRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof login>>,
   TError,
   { data: ApiLoginRequest },
@@ -107,35 +112,32 @@ export const useLogin = <TError = AxiosError<MiddlewareHttpError>, TContext = un
 > => {
   const mutationOptions = getLoginMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Get information about the currently authenticated user
  * @summary Get current user
  */
-export const getCurrentUser = (
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
-  return axios.default.get(`/me`, options)
+export const getCurrentUser = (signal?: AbortSignal) => {
+  return authMutator<ApiUserResponse>({ url: `/api/v1/auth/me`, method: 'GET', signal })
 }
 
 export const getGetCurrentUserQueryKey = () => {
-  return ['me'] as const
+  return ['api', 'v1', 'auth', 'me'] as const
 }
 
 export const getGetCurrentUserQueryOptions = <
   TData = Awaited<ReturnType<typeof getCurrentUser>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>
-  axios?: AxiosRequestConfig
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>>
 }) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getGetCurrentUserQueryKey()
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({ signal }) =>
-    getCurrentUser({ signal, ...axiosOptions })
+    getCurrentUser(signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getCurrentUser>>,
@@ -145,7 +147,7 @@ export const getGetCurrentUserQueryOptions = <
 }
 
 export type GetCurrentUserQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
-export type GetCurrentUserQueryError = AxiosError<MiddlewareHttpError>
+export type GetCurrentUserQueryError = MiddlewareHttpError
 
 /**
  * @summary Get current user
@@ -153,16 +155,20 @@ export type GetCurrentUserQueryError = AxiosError<MiddlewareHttpError>
 
 export function useGetCurrentUser<
   TData = Awaited<ReturnType<typeof getCurrentUser>>,
-  TError = AxiosError<MiddlewareHttpError>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>
-  axios?: AxiosRequestConfig
-}): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  TError = MiddlewareHttpError,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getGetCurrentUserQueryOptions(options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -171,17 +177,19 @@ export function useGetCurrentUser<
  * Update information about the currently authenticated user
  * @summary Update current user
  */
-export const updateCurrentUser = (
-  apiUpdateUserRequest: MaybeRef<ApiUpdateUserRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+export const updateCurrentUser = (apiUpdateUserRequest: MaybeRef<ApiUpdateUserRequest>) => {
   apiUpdateUserRequest = unref(apiUpdateUserRequest)
 
-  return axios.default.put(`/me`, apiUpdateUserRequest, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/me`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiUpdateUserRequest,
+  })
 }
 
 export const getUpdateCurrentUserMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -190,7 +198,6 @@ export const getUpdateCurrentUserMutationOptions = <
     { data: ApiUpdateUserRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateCurrentUser>>,
   TError,
@@ -198,11 +205,11 @@ export const getUpdateCurrentUserMutationOptions = <
   TContext
 > => {
   const mutationKey = ['updateCurrentUser']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateCurrentUser>>,
@@ -210,7 +217,7 @@ export const getUpdateCurrentUserMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return updateCurrentUser(data, axiosOptions)
+    return updateCurrentUser(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -220,23 +227,22 @@ export type UpdateCurrentUserMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateCurrentUser>>
 >
 export type UpdateCurrentUserMutationBody = ApiUpdateUserRequest
-export type UpdateCurrentUserMutationError = AxiosError<MiddlewareHttpError>
+export type UpdateCurrentUserMutationError = MiddlewareHttpError
 
 /**
  * @summary Update current user
  */
-export const useUpdateCurrentUser = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updateCurrentUser>>,
-    TError,
-    { data: ApiUpdateUserRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useUpdateCurrentUser = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateCurrentUser>>,
+      TError,
+      { data: ApiUpdateUserRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof updateCurrentUser>>,
   TError,
   { data: ApiUpdateUserRequest },
@@ -244,23 +250,25 @@ export const useUpdateCurrentUser = <
 > => {
   const mutationOptions = getUpdateCurrentUserMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Change password for the currently authenticated user
  * @summary Change password
  */
-export const changePassword = (
-  apiChangePasswordRequest: MaybeRef<ApiChangePasswordRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ChangePassword200>> => {
+export const changePassword = (apiChangePasswordRequest: MaybeRef<ApiChangePasswordRequest>) => {
   apiChangePasswordRequest = unref(apiChangePasswordRequest)
 
-  return axios.default.put(`/me/password`, apiChangePasswordRequest, options)
+  return authMutator<ChangePassword200>({
+    url: `/api/v1/auth/me/password`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiChangePasswordRequest,
+  })
 }
 
 export const getChangePasswordMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -269,7 +277,6 @@ export const getChangePasswordMutationOptions = <
     { data: ApiChangePasswordRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof changePassword>>,
   TError,
@@ -277,11 +284,11 @@ export const getChangePasswordMutationOptions = <
   TContext
 > => {
   const mutationKey = ['changePassword']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof changePassword>>,
@@ -289,7 +296,7 @@ export const getChangePasswordMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return changePassword(data, axiosOptions)
+    return changePassword(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -297,23 +304,22 @@ export const getChangePasswordMutationOptions = <
 
 export type ChangePasswordMutationResult = NonNullable<Awaited<ReturnType<typeof changePassword>>>
 export type ChangePasswordMutationBody = ApiChangePasswordRequest
-export type ChangePasswordMutationError = AxiosError<MiddlewareHttpError>
+export type ChangePasswordMutationError = MiddlewareHttpError
 
 /**
  * @summary Change password
  */
-export const useChangePassword = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof changePassword>>,
-    TError,
-    { data: ApiChangePasswordRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useChangePassword = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof changePassword>>,
+      TError,
+      { data: ApiChangePasswordRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof changePassword>>,
   TError,
   { data: ApiChangePasswordRequest },
@@ -321,7 +327,7 @@ export const useChangePassword = <
 > => {
   const mutationOptions = getChangePasswordMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Use refresh token to get a new access token
@@ -329,15 +335,21 @@ export const useChangePassword = <
  */
 export const refreshToken = (
   refreshTokenBody: MaybeRef<RefreshTokenBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiTokenResponse>> => {
+  signal?: AbortSignal,
+) => {
   refreshTokenBody = unref(refreshTokenBody)
 
-  return axios.default.post(`/refresh`, refreshTokenBody, options)
+  return authMutator<ApiTokenResponse>({
+    url: `/api/v1/auth/refresh`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: refreshTokenBody,
+    signal,
+  })
 }
 
 export const getRefreshTokenMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -346,7 +358,6 @@ export const getRefreshTokenMutationOptions = <
     { data: RefreshTokenBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof refreshToken>>,
   TError,
@@ -354,11 +365,11 @@ export const getRefreshTokenMutationOptions = <
   TContext
 > => {
   const mutationKey = ['refreshToken']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof refreshToken>>,
@@ -366,7 +377,7 @@ export const getRefreshTokenMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return refreshToken(data, axiosOptions)
+    return refreshToken(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -374,23 +385,22 @@ export const getRefreshTokenMutationOptions = <
 
 export type RefreshTokenMutationResult = NonNullable<Awaited<ReturnType<typeof refreshToken>>>
 export type RefreshTokenMutationBody = RefreshTokenBody
-export type RefreshTokenMutationError = AxiosError<MiddlewareHttpError>
+export type RefreshTokenMutationError = MiddlewareHttpError
 
 /**
  * @summary Refresh access token
  */
-export const useRefreshToken = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof refreshToken>>,
-    TError,
-    { data: RefreshTokenBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useRefreshToken = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof refreshToken>>,
+      TError,
+      { data: RefreshTokenBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof refreshToken>>,
   TError,
   { data: RefreshTokenBody },
@@ -398,7 +408,7 @@ export const useRefreshToken = <
 > => {
   const mutationOptions = getRefreshTokenMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Register a new user account
@@ -406,15 +416,21 @@ export const useRefreshToken = <
  */
 export const register = (
   apiRegisterRequest: MaybeRef<ApiRegisterRequest>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+  signal?: AbortSignal,
+) => {
   apiRegisterRequest = unref(apiRegisterRequest)
 
-  return axios.default.post(`/register`, apiRegisterRequest, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/register`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiRegisterRequest,
+    signal,
+  })
 }
 
 export const getRegisterMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -423,7 +439,6 @@ export const getRegisterMutationOptions = <
     { data: ApiRegisterRequest },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof register>>,
   TError,
@@ -431,11 +446,11 @@ export const getRegisterMutationOptions = <
   TContext
 > => {
   const mutationKey = ['register']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof register>>,
@@ -443,7 +458,7 @@ export const getRegisterMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return register(data, axiosOptions)
+    return register(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -451,23 +466,22 @@ export const getRegisterMutationOptions = <
 
 export type RegisterMutationResult = NonNullable<Awaited<ReturnType<typeof register>>>
 export type RegisterMutationBody = ApiRegisterRequest
-export type RegisterMutationError = AxiosError<MiddlewareHttpError>
+export type RegisterMutationError = MiddlewareHttpError
 
 /**
  * @summary Register a new user
  */
-export const useRegister = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof register>>,
-    TError,
-    { data: ApiRegisterRequest },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useRegister = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof register>>,
+      TError,
+      { data: ApiRegisterRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof register>>,
   TError,
   { data: ApiRegisterRequest },
@@ -475,23 +489,26 @@ export const useRegister = <
 > => {
   const mutationOptions = getRegisterMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Verify a JWT token and return user information
  * @summary Verify JWT token
  */
-export const verifyToken = (
-  verifyTokenBody: MaybeRef<VerifyTokenBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiUserResponse>> => {
+export const verifyToken = (verifyTokenBody: MaybeRef<VerifyTokenBody>, signal?: AbortSignal) => {
   verifyTokenBody = unref(verifyTokenBody)
 
-  return axios.default.post(`/verify`, verifyTokenBody, options)
+  return authMutator<ApiUserResponse>({
+    url: `/api/v1/auth/verify`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: verifyTokenBody,
+    signal,
+  })
 }
 
 export const getVerifyTokenMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -500,7 +517,6 @@ export const getVerifyTokenMutationOptions = <
     { data: VerifyTokenBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof verifyToken>>,
   TError,
@@ -508,11 +524,11 @@ export const getVerifyTokenMutationOptions = <
   TContext
 > => {
   const mutationKey = ['verifyToken']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof verifyToken>>,
@@ -520,7 +536,7 @@ export const getVerifyTokenMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return verifyToken(data, axiosOptions)
+    return verifyToken(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -528,23 +544,22 @@ export const getVerifyTokenMutationOptions = <
 
 export type VerifyTokenMutationResult = NonNullable<Awaited<ReturnType<typeof verifyToken>>>
 export type VerifyTokenMutationBody = VerifyTokenBody
-export type VerifyTokenMutationError = AxiosError<MiddlewareHttpError>
+export type VerifyTokenMutationError = MiddlewareHttpError
 
 /**
  * @summary Verify JWT token
  */
-export const useVerifyToken = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof verifyToken>>,
-    TError,
-    { data: VerifyTokenBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useVerifyToken = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof verifyToken>>,
+      TError,
+      { data: VerifyTokenBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof verifyToken>>,
   TError,
   { data: VerifyTokenBody },
@@ -552,5 +567,5 @@ export const useVerifyToken = <
 > => {
   const mutationOptions = getVerifyTokenMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }

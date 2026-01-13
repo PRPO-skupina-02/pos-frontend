@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -32,42 +31,45 @@ import type {
   ReservationsListParams,
 } from '.././model'
 
+import { nakupMutator } from '../../nakup-mutator'
+
 /**
  * List reservations
  * @summary List reservations
  */
 export const reservationsList = (
   params?: MaybeRef<ReservationsListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ReservationsList200>> => {
+  signal?: AbortSignal,
+) => {
   params = unref(params)
 
-  return axios.default.get(`/reservations`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return nakupMutator<ReservationsList200>({
+    url: `/api/v1/nakup/reservations`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
 export const getReservationsListQueryKey = (params?: MaybeRef<ReservationsListParams>) => {
-  return ['reservations', ...(params ? [params] : [])] as const
+  return ['api', 'v1', 'nakup', 'reservations', ...(params ? [params] : [])] as const
 }
 
 export const getReservationsListQueryOptions = <
   TData = Awaited<ReturnType<typeof reservationsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<ReservationsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof reservationsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getReservationsListQueryKey(params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof reservationsList>>> = ({ signal }) =>
-    reservationsList(params, { signal, ...axiosOptions })
+    reservationsList(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof reservationsList>>,
@@ -77,7 +79,7 @@ export const getReservationsListQueryOptions = <
 }
 
 export type ReservationsListQueryResult = NonNullable<Awaited<ReturnType<typeof reservationsList>>>
-export type ReservationsListQueryError = AxiosError<MiddlewareHttpError>
+export type ReservationsListQueryError = MiddlewareHttpError
 
 /**
  * @summary List reservations
@@ -85,19 +87,21 @@ export type ReservationsListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useReservationsList<
   TData = Awaited<ReturnType<typeof reservationsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<ReservationsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof reservationsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getReservationsListQueryOptions(params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -108,15 +112,21 @@ export function useReservationsList<
  */
 export const reservationsCreate = (
   apiReservationRequestBody: MaybeRef<ApiReservationRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiReservationResponse>> => {
+  signal?: AbortSignal,
+) => {
   apiReservationRequestBody = unref(apiReservationRequestBody)
 
-  return axios.default.post(`/reservations`, apiReservationRequestBody, options)
+  return nakupMutator<ApiReservationResponse>({
+    url: `/api/v1/nakup/reservations`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiReservationRequestBody,
+    signal,
+  })
 }
 
 export const getReservationsCreateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -125,7 +135,6 @@ export const getReservationsCreateMutationOptions = <
     { data: ApiReservationRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof reservationsCreate>>,
   TError,
@@ -133,11 +142,11 @@ export const getReservationsCreateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['reservationsCreate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof reservationsCreate>>,
@@ -145,7 +154,7 @@ export const getReservationsCreateMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return reservationsCreate(data, axiosOptions)
+    return reservationsCreate(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -155,23 +164,22 @@ export type ReservationsCreateMutationResult = NonNullable<
   Awaited<ReturnType<typeof reservationsCreate>>
 >
 export type ReservationsCreateMutationBody = ApiReservationRequestBody
-export type ReservationsCreateMutationError = AxiosError<MiddlewareHttpError>
+export type ReservationsCreateMutationError = MiddlewareHttpError
 
 /**
  * @summary Create reservation
  */
-export const useReservationsCreate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof reservationsCreate>>,
-    TError,
-    { data: ApiReservationRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useReservationsCreate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reservationsCreate>>,
+      TError,
+      { data: ApiReservationRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof reservationsCreate>>,
   TError,
   { data: ApiReservationRequestBody },
@@ -179,23 +187,23 @@ export const useReservationsCreate = <
 > => {
   const mutationOptions = getReservationsCreateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Delete reservation
  * @summary Delete reservation
  */
-export const reservationsDelete = (
-  reservationID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
+export const reservationsDelete = (reservationID: MaybeRef<string>) => {
   reservationID = unref(reservationID)
 
-  return axios.default.delete(`/reservations/${reservationID}`, options)
+  return nakupMutator<void>({
+    url: `/api/v1/nakup/reservations/${reservationID}`,
+    method: 'DELETE',
+  })
 }
 
 export const getReservationsDeleteMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -204,7 +212,6 @@ export const getReservationsDeleteMutationOptions = <
     { reservationID: string },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof reservationsDelete>>,
   TError,
@@ -212,11 +219,11 @@ export const getReservationsDeleteMutationOptions = <
   TContext
 > => {
   const mutationKey = ['reservationsDelete']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof reservationsDelete>>,
@@ -224,7 +231,7 @@ export const getReservationsDeleteMutationOptions = <
   > = (props) => {
     const { reservationID } = props ?? {}
 
-    return reservationsDelete(reservationID, axiosOptions)
+    return reservationsDelete(reservationID)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -234,23 +241,22 @@ export type ReservationsDeleteMutationResult = NonNullable<
   Awaited<ReturnType<typeof reservationsDelete>>
 >
 
-export type ReservationsDeleteMutationError = AxiosError<MiddlewareHttpError>
+export type ReservationsDeleteMutationError = MiddlewareHttpError
 
 /**
  * @summary Delete reservation
  */
-export const useReservationsDelete = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof reservationsDelete>>,
-    TError,
-    { reservationID: string },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useReservationsDelete = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reservationsDelete>>,
+      TError,
+      { reservationID: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof reservationsDelete>>,
   TError,
   { reservationID: string },
@@ -258,41 +264,41 @@ export const useReservationsDelete = <
 > => {
   const mutationOptions = getReservationsDeleteMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Show reservation
  * @summary Show reservation
  */
-export const reservationsShow = (
-  reservationID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiReservationResponse>> => {
+export const reservationsShow = (reservationID: MaybeRef<string>, signal?: AbortSignal) => {
   reservationID = unref(reservationID)
 
-  return axios.default.get(`/reservations/${reservationID}`, options)
+  return nakupMutator<ApiReservationResponse>({
+    url: `/api/v1/nakup/reservations/${reservationID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getReservationsShowQueryKey = (reservationID?: MaybeRef<string>) => {
-  return ['reservations', reservationID] as const
+  return ['api', 'v1', 'nakup', 'reservations', reservationID] as const
 }
 
 export const getReservationsShowQueryOptions = <
   TData = Awaited<ReturnType<typeof reservationsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof reservationsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getReservationsShowQueryKey(reservationID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof reservationsShow>>> = ({ signal }) =>
-    reservationsShow(reservationID, { signal, ...axiosOptions })
+    reservationsShow(reservationID, signal)
 
   return {
     queryKey,
@@ -303,7 +309,7 @@ export const getReservationsShowQueryOptions = <
 }
 
 export type ReservationsShowQueryResult = NonNullable<Awaited<ReturnType<typeof reservationsShow>>>
-export type ReservationsShowQueryError = AxiosError<MiddlewareHttpError>
+export type ReservationsShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Show reservation
@@ -311,19 +317,21 @@ export type ReservationsShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function useReservationsShow<
   TData = Awaited<ReturnType<typeof reservationsShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   reservationID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof reservationsShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof reservationsShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getReservationsShowQueryOptions(reservationID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -335,16 +343,20 @@ export function useReservationsShow<
 export const reservationsUpdate = (
   reservationID: MaybeRef<string>,
   apiReservationRequestBody: MaybeRef<ApiReservationRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiReservationResponse>> => {
+) => {
   reservationID = unref(reservationID)
   apiReservationRequestBody = unref(apiReservationRequestBody)
 
-  return axios.default.put(`/reservations/${reservationID}`, apiReservationRequestBody, options)
+  return nakupMutator<ApiReservationResponse>({
+    url: `/api/v1/nakup/reservations/${reservationID}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiReservationRequestBody,
+  })
 }
 
 export const getReservationsUpdateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -353,7 +365,6 @@ export const getReservationsUpdateMutationOptions = <
     { reservationID: string; data: ApiReservationRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof reservationsUpdate>>,
   TError,
@@ -361,11 +372,11 @@ export const getReservationsUpdateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['reservationsUpdate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof reservationsUpdate>>,
@@ -373,7 +384,7 @@ export const getReservationsUpdateMutationOptions = <
   > = (props) => {
     const { reservationID, data } = props ?? {}
 
-    return reservationsUpdate(reservationID, data, axiosOptions)
+    return reservationsUpdate(reservationID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -383,23 +394,22 @@ export type ReservationsUpdateMutationResult = NonNullable<
   Awaited<ReturnType<typeof reservationsUpdate>>
 >
 export type ReservationsUpdateMutationBody = ApiReservationRequestBody
-export type ReservationsUpdateMutationError = AxiosError<MiddlewareHttpError>
+export type ReservationsUpdateMutationError = MiddlewareHttpError
 
 /**
  * @summary Update reservation
  */
-export const useReservationsUpdate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof reservationsUpdate>>,
-    TError,
-    { reservationID: string; data: ApiReservationRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useReservationsUpdate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reservationsUpdate>>,
+      TError,
+      { reservationID: string; data: ApiReservationRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof reservationsUpdate>>,
   TError,
   { reservationID: string; data: ApiReservationRequestBody },
@@ -407,7 +417,7 @@ export const useReservationsUpdate = <
 > => {
   const mutationOptions = getReservationsUpdateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * List reservations for the currently authenticated user
@@ -415,36 +425,37 @@ export const useReservationsUpdate = <
  */
 export const myReservationsList = (
   params?: MaybeRef<MyReservationsListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<MyReservationsList200>> => {
+  signal?: AbortSignal,
+) => {
   params = unref(params)
 
-  return axios.default.get(`/reservations/my`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return nakupMutator<MyReservationsList200>({
+    url: `/api/v1/nakup/reservations/my`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
 export const getMyReservationsListQueryKey = (params?: MaybeRef<MyReservationsListParams>) => {
-  return ['reservations', 'my', ...(params ? [params] : [])] as const
+  return ['api', 'v1', 'nakup', 'reservations', 'my', ...(params ? [params] : [])] as const
 }
 
 export const getMyReservationsListQueryOptions = <
   TData = Awaited<ReturnType<typeof myReservationsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<MyReservationsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof myReservationsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof myReservationsList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getMyReservationsListQueryKey(params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof myReservationsList>>> = ({ signal }) =>
-    myReservationsList(params, { signal, ...axiosOptions })
+    myReservationsList(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof myReservationsList>>,
@@ -456,7 +467,7 @@ export const getMyReservationsListQueryOptions = <
 export type MyReservationsListQueryResult = NonNullable<
   Awaited<ReturnType<typeof myReservationsList>>
 >
-export type MyReservationsListQueryError = AxiosError<MiddlewareHttpError>
+export type MyReservationsListQueryError = MiddlewareHttpError
 
 /**
  * @summary List my reservations
@@ -464,19 +475,21 @@ export type MyReservationsListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useMyReservationsList<
   TData = Awaited<ReturnType<typeof myReservationsList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<MyReservationsListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof myReservationsList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof myReservationsList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getMyReservationsListQueryOptions(params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }

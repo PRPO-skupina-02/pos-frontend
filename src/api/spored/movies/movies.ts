@@ -7,7 +7,9 @@
  */
 import { useMutation, useQuery } from '@tanstack/vue-query'
 import type {
+  DataTag,
   MutationFunction,
+  QueryClient,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
@@ -15,9 +17,6 @@ import type {
   UseQueryOptions,
   UseQueryReturnType,
 } from '@tanstack/vue-query'
-
-import * as axios from 'axios'
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { computed, unref } from 'vue'
 import type { MaybeRef } from 'vue'
@@ -30,42 +29,42 @@ import type {
   MoviesListParams,
 } from '.././model'
 
+import { sporedMutator } from '../../spored-mutator'
+
 /**
  * List movies
  * @summary List movies
  */
-export const moviesList = (
-  params?: MaybeRef<MoviesListParams>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<MoviesList200>> => {
+export const moviesList = (params?: MaybeRef<MoviesListParams>, signal?: AbortSignal) => {
   params = unref(params)
 
-  return axios.default.get(`/movies`, {
-    ...options,
-    params: { ...unref(params), ...options?.params },
+  return sporedMutator<MoviesList200>({
+    url: `/api/v1/spored/movies`,
+    method: 'GET',
+    params: unref(params),
+    signal,
   })
 }
 
 export const getMoviesListQueryKey = (params?: MaybeRef<MoviesListParams>) => {
-  return ['movies', ...(params ? [params] : [])] as const
+  return ['api', 'v1', 'spored', 'movies', ...(params ? [params] : [])] as const
 }
 
 export const getMoviesListQueryOptions = <
   TData = Awaited<ReturnType<typeof moviesList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<MoviesListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof moviesList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof moviesList>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getMoviesListQueryKey(params)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof moviesList>>> = ({ signal }) =>
-    moviesList(params, { signal, ...axiosOptions })
+    moviesList(params, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof moviesList>>,
@@ -75,7 +74,7 @@ export const getMoviesListQueryOptions = <
 }
 
 export type MoviesListQueryResult = NonNullable<Awaited<ReturnType<typeof moviesList>>>
-export type MoviesListQueryError = AxiosError<MiddlewareHttpError>
+export type MoviesListQueryError = MiddlewareHttpError
 
 /**
  * @summary List movies
@@ -83,19 +82,21 @@ export type MoviesListQueryError = AxiosError<MiddlewareHttpError>
 
 export function useMoviesList<
   TData = Awaited<ReturnType<typeof moviesList>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   params?: MaybeRef<MoviesListParams>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof moviesList>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof moviesList>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getMoviesListQueryOptions(params, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -106,15 +107,21 @@ export function useMoviesList<
  */
 export const moviesCreate = (
   apiMovieRequestBody: MaybeRef<ApiMovieRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiMovieResponse>> => {
+  signal?: AbortSignal,
+) => {
   apiMovieRequestBody = unref(apiMovieRequestBody)
 
-  return axios.default.post(`/movies`, apiMovieRequestBody, options)
+  return sporedMutator<ApiMovieResponse>({
+    url: `/api/v1/spored/movies`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiMovieRequestBody,
+    signal,
+  })
 }
 
 export const getMoviesCreateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -123,7 +130,6 @@ export const getMoviesCreateMutationOptions = <
     { data: ApiMovieRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof moviesCreate>>,
   TError,
@@ -131,11 +137,11 @@ export const getMoviesCreateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['moviesCreate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof moviesCreate>>,
@@ -143,7 +149,7 @@ export const getMoviesCreateMutationOptions = <
   > = (props) => {
     const { data } = props ?? {}
 
-    return moviesCreate(data, axiosOptions)
+    return moviesCreate(data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -151,23 +157,22 @@ export const getMoviesCreateMutationOptions = <
 
 export type MoviesCreateMutationResult = NonNullable<Awaited<ReturnType<typeof moviesCreate>>>
 export type MoviesCreateMutationBody = ApiMovieRequestBody
-export type MoviesCreateMutationError = AxiosError<MiddlewareHttpError>
+export type MoviesCreateMutationError = MiddlewareHttpError
 
 /**
  * @summary Create movie
  */
-export const useMoviesCreate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof moviesCreate>>,
-    TError,
-    { data: ApiMovieRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useMoviesCreate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof moviesCreate>>,
+      TError,
+      { data: ApiMovieRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof moviesCreate>>,
   TError,
   { data: ApiMovieRequestBody },
@@ -175,23 +180,20 @@ export const useMoviesCreate = <
 > => {
   const mutationOptions = getMoviesCreateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Delete movie
  * @summary Delete movie
  */
-export const moviesDelete = (
-  movieID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<void>> => {
+export const moviesDelete = (movieID: MaybeRef<string>) => {
   movieID = unref(movieID)
 
-  return axios.default.delete(`/movies/${movieID}`, options)
+  return sporedMutator<void>({ url: `/api/v1/spored/movies/${movieID}`, method: 'DELETE' })
 }
 
 export const getMoviesDeleteMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -200,7 +202,6 @@ export const getMoviesDeleteMutationOptions = <
     { movieID: string },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof moviesDelete>>,
   TError,
@@ -208,11 +209,11 @@ export const getMoviesDeleteMutationOptions = <
   TContext
 > => {
   const mutationKey = ['moviesDelete']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof moviesDelete>>,
@@ -220,7 +221,7 @@ export const getMoviesDeleteMutationOptions = <
   > = (props) => {
     const { movieID } = props ?? {}
 
-    return moviesDelete(movieID, axiosOptions)
+    return moviesDelete(movieID)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -228,23 +229,22 @@ export const getMoviesDeleteMutationOptions = <
 
 export type MoviesDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof moviesDelete>>>
 
-export type MoviesDeleteMutationError = AxiosError<MiddlewareHttpError>
+export type MoviesDeleteMutationError = MiddlewareHttpError
 
 /**
  * @summary Delete movie
  */
-export const useMoviesDelete = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof moviesDelete>>,
-    TError,
-    { movieID: string },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useMoviesDelete = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof moviesDelete>>,
+      TError,
+      { movieID: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof moviesDelete>>,
   TError,
   { movieID: string },
@@ -252,41 +252,41 @@ export const useMoviesDelete = <
 > => {
   const mutationOptions = getMoviesDeleteMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }
 /**
  * Show movie
  * @summary Show movie
  */
-export const moviesShow = (
-  movieID: MaybeRef<string>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiMovieResponse>> => {
+export const moviesShow = (movieID: MaybeRef<string>, signal?: AbortSignal) => {
   movieID = unref(movieID)
 
-  return axios.default.get(`/movies/${movieID}`, options)
+  return sporedMutator<ApiMovieResponse>({
+    url: `/api/v1/spored/movies/${movieID}`,
+    method: 'GET',
+    signal,
+  })
 }
 
 export const getMoviesShowQueryKey = (movieID?: MaybeRef<string>) => {
-  return ['movies', movieID] as const
+  return ['api', 'v1', 'spored', 'movies', movieID] as const
 }
 
 export const getMoviesShowQueryOptions = <
   TData = Awaited<ReturnType<typeof moviesShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   movieID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof moviesShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof moviesShow>>, TError, TData>>
   },
 ) => {
-  const { query: queryOptions, axios: axiosOptions } = options ?? {}
+  const { query: queryOptions } = options ?? {}
 
   const queryKey = getMoviesShowQueryKey(movieID)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof moviesShow>>> = ({ signal }) =>
-    moviesShow(movieID, { signal, ...axiosOptions })
+    moviesShow(movieID, signal)
 
   return {
     queryKey,
@@ -297,7 +297,7 @@ export const getMoviesShowQueryOptions = <
 }
 
 export type MoviesShowQueryResult = NonNullable<Awaited<ReturnType<typeof moviesShow>>>
-export type MoviesShowQueryError = AxiosError<MiddlewareHttpError>
+export type MoviesShowQueryError = MiddlewareHttpError
 
 /**
  * @summary Show movie
@@ -305,19 +305,21 @@ export type MoviesShowQueryError = AxiosError<MiddlewareHttpError>
 
 export function useMoviesShow<
   TData = Awaited<ReturnType<typeof moviesShow>>,
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
 >(
   movieID: MaybeRef<string>,
   options?: {
-    query?: UseQueryOptions<Awaited<ReturnType<typeof moviesShow>>, TError, TData>
-    axios?: AxiosRequestConfig
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof moviesShow>>, TError, TData>>
   },
-): UseQueryReturnType<TData, TError> & { queryKey: QueryKey } {
+  queryClient?: QueryClient,
+): UseQueryReturnType<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getMoviesShowQueryOptions(movieID, options)
 
-  const query = useQuery(queryOptions) as UseQueryReturnType<TData, TError> & { queryKey: QueryKey }
+  const query = useQuery(queryOptions, queryClient) as UseQueryReturnType<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
 
-  query.queryKey = unref(queryOptions).queryKey as QueryKey
+  query.queryKey = unref(queryOptions).queryKey as DataTag<QueryKey, TData, TError>
 
   return query
 }
@@ -329,16 +331,20 @@ export function useMoviesShow<
 export const moviesUpdate = (
   movieID: MaybeRef<string>,
   apiMovieRequestBody: MaybeRef<ApiMovieRequestBody>,
-  options?: AxiosRequestConfig,
-): Promise<AxiosResponse<ApiMovieResponse>> => {
+) => {
   movieID = unref(movieID)
   apiMovieRequestBody = unref(apiMovieRequestBody)
 
-  return axios.default.put(`/movies/${movieID}`, apiMovieRequestBody, options)
+  return sporedMutator<ApiMovieResponse>({
+    url: `/api/v1/spored/movies/${movieID}`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: apiMovieRequestBody,
+  })
 }
 
 export const getMoviesUpdateMutationOptions = <
-  TError = AxiosError<MiddlewareHttpError>,
+  TError = MiddlewareHttpError,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -347,7 +353,6 @@ export const getMoviesUpdateMutationOptions = <
     { movieID: string; data: ApiMovieRequestBody },
     TContext
   >
-  axios?: AxiosRequestConfig
 }): UseMutationOptions<
   Awaited<ReturnType<typeof moviesUpdate>>,
   TError,
@@ -355,11 +360,11 @@ export const getMoviesUpdateMutationOptions = <
   TContext
 > => {
   const mutationKey = ['moviesUpdate']
-  const { mutation: mutationOptions, axios: axiosOptions } = options
+  const { mutation: mutationOptions } = options
     ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, axios: undefined }
+    : { mutation: { mutationKey } }
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof moviesUpdate>>,
@@ -367,7 +372,7 @@ export const getMoviesUpdateMutationOptions = <
   > = (props) => {
     const { movieID, data } = props ?? {}
 
-    return moviesUpdate(movieID, data, axiosOptions)
+    return moviesUpdate(movieID, data)
   }
 
   return { mutationFn, ...mutationOptions }
@@ -375,23 +380,22 @@ export const getMoviesUpdateMutationOptions = <
 
 export type MoviesUpdateMutationResult = NonNullable<Awaited<ReturnType<typeof moviesUpdate>>>
 export type MoviesUpdateMutationBody = ApiMovieRequestBody
-export type MoviesUpdateMutationError = AxiosError<MiddlewareHttpError>
+export type MoviesUpdateMutationError = MiddlewareHttpError
 
 /**
  * @summary Update movie
  */
-export const useMoviesUpdate = <
-  TError = AxiosError<MiddlewareHttpError>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof moviesUpdate>>,
-    TError,
-    { movieID: string; data: ApiMovieRequestBody },
-    TContext
-  >
-  axios?: AxiosRequestConfig
-}): UseMutationReturnType<
+export const useMoviesUpdate = <TError = MiddlewareHttpError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof moviesUpdate>>,
+      TError,
+      { movieID: string; data: ApiMovieRequestBody },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationReturnType<
   Awaited<ReturnType<typeof moviesUpdate>>,
   TError,
   { movieID: string; data: ApiMovieRequestBody },
@@ -399,5 +403,5 @@ export const useMoviesUpdate = <
 > => {
   const mutationOptions = getMoviesUpdateMutationOptions(options)
 
-  return useMutation(mutationOptions)
+  return useMutation(mutationOptions, queryClient)
 }

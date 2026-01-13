@@ -17,6 +17,8 @@
     "swagger": "orval"
   },
   "dependencies": {
+    "@tanstack/vue-query": "^5.92.5",
+    "bootstrap": "^5.3.8",
     "vue": "^3.5.26",
     "vue-router": "^4.6.4"
   },
