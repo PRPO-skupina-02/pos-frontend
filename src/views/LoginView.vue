@@ -44,20 +44,61 @@
         <div class="text-center mt-3">
           <small class="text-muted">For employees and administrators only</small>
         </div>
+
+        <div class="mt-3">
+          <hr />
+          <div class="text-center">
+            <button
+              type="button"
+              class="btn btn-link btn-sm text-decoration-none p-0"
+              @click="showTheaterList = !showTheaterList"
+            >
+              <small> {{ showTheaterList ? '− Hide' : '+ View' }} Advertising Display </small>
+            </button>
+          </div>
+
+          <div v-if="showTheaterList" class="mt-3">
+            <div v-if="theatersLoading" class="text-center">
+              <div class="spinner-border spinner-border-sm"></div>
+            </div>
+            <div v-else-if="theaters.length > 0" class="list-group">
+              <router-link
+                v-for="theater in theaters"
+                :key="theater.id"
+                :to="`/advertising/${theater.id}`"
+                class="list-group-item list-group-item-action"
+              >
+                <small>{{ theater.name }}</small>
+              </router-link>
+            </div>
+            <div v-else class="text-center">
+              <small class="text-muted">No theaters available</small>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useTheatersList } from '@/api/spored/theaters/theaters'
 import { useAuth } from '@/composables/useAuth'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const { login, isAuthenticating } = useAuth()
 
 const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
+const showTheaterList = ref(false)
+
+const { data: theatersData, isLoading: theatersLoading } = useTheatersList()
+
+const theaters = computed(() => {
+  const response = theatersData.value?.data
+  return response || []
+})
 
 async function handleLogin(): Promise<void> {
   errorMessage.value = ''

@@ -46,8 +46,11 @@
                 <button class="btn btn-sm btn-outline-primary" @click="showEditModal(user)">
                   Edit
                 </button>
-                <button class="btn btn-sm btn-outline-danger" @click="handleDelete(user.id!)"
-                  :disabled="deleteMutation.isPending.value">
+                <button
+                  class="btn btn-sm btn-outline-danger"
+                  @click="handleDelete(user.id!)"
+                  :disabled="deleteMutation.isPending.value"
+                >
                   Delete
                 </button>
               </div>
@@ -73,18 +76,34 @@
 
               <div v-if="!editingUser" class="mb-3">
                 <label class="form-label">Password</label>
-                <input v-model="userForm.password" type="password" class="form-control" required minlength="8" />
+                <input
+                  v-model="userForm.password"
+                  type="password"
+                  class="form-control"
+                  required
+                  minlength="8"
+                />
                 <small class="form-text text-muted">Minimum 8 characters</small>
               </div>
 
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label class="form-label">First Name</label>
-                  <input v-model="userForm.first_name" type="text" class="form-control" minlength="1" />
+                  <input
+                    v-model="userForm.first_name"
+                    type="text"
+                    class="form-control"
+                    minlength="1"
+                  />
                 </div>
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Last Name</label>
-                  <input v-model="userForm.last_name" type="text" class="form-control" minlength="1" />
+                  <input
+                    v-model="userForm.last_name"
+                    type="text"
+                    class="form-control"
+                    minlength="1"
+                  />
                 </div>
               </div>
 
@@ -107,10 +126,15 @@
 
               <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-                <button type="submit" class="btn btn-primary"
-                  :disabled="createMutation.isPending.value || updateMutation.isPending.value">
-                  <span v-if="createMutation.isPending.value || updateMutation.isPending.value"
-                    class="spinner-border spinner-border-sm me-1"></span>
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  :disabled="createMutation.isPending.value || updateMutation.isPending.value"
+                >
+                  <span
+                    v-if="createMutation.isPending.value || updateMutation.isPending.value"
+                    class="spinner-border spinner-border-sm me-1"
+                  ></span>
                   {{ editingUser ? 'Save' : 'Create' }}
                 </button>
               </div>
@@ -125,34 +149,34 @@
 </template>
 
 <script setup lang="ts">
-import { ApiAdminCreateUserRequestRole, type ApiUserResponse } from '@/api/auth/model';
+import { ApiAdminCreateUserRequestRole, type ApiUserResponse } from '@/api/auth/model'
 import {
   useAdminCreateUser,
   useUsersDelete,
   useUsersList,
   useUsersUpdate,
-} from '@/api/auth/users/users';
-import { computed, ref } from 'vue';
+} from '@/api/auth/users/users'
+import { computed, ref } from 'vue'
 
-const { data, isLoading, error, refetch } = useUsersList();
+const { data, isLoading, error, refetch } = useUsersList()
 
 const users = computed(() => {
-  return (data.value?.data || []) as ApiUserResponse[];
-});
+  return (data.value?.data || []) as ApiUserResponse[]
+})
 
-const createMutation = useAdminCreateUser();
-const updateMutation = useUsersUpdate();
-const deleteMutation = useUsersDelete();
+const createMutation = useAdminCreateUser()
+const updateMutation = useUsersUpdate()
+const deleteMutation = useUsersDelete()
 
-const showModal = ref(false);
-const editingUser = ref<ApiUserResponse | null>(null);
+const showModal = ref(false)
+const editingUser = ref<ApiUserResponse | null>(null)
 const userForm = ref<{
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-  role: ApiAdminCreateUserRequestRole;
-  active: boolean;
+  email: string
+  password: string
+  first_name: string
+  last_name: string
+  role: ApiAdminCreateUserRequestRole
+  active: boolean
 }>({
   email: '',
   password: '',
@@ -160,10 +184,10 @@ const userForm = ref<{
   last_name: '',
   role: ApiAdminCreateUserRequestRole.customer,
   active: true,
-});
+})
 
 function showCreateModal() {
-  editingUser.value = null;
+  editingUser.value = null
   userForm.value = {
     email: '',
     password: '',
@@ -171,12 +195,12 @@ function showCreateModal() {
     last_name: '',
     role: ApiAdminCreateUserRequestRole.customer,
     active: true,
-  };
-  showModal.value = true;
+  }
+  showModal.value = true
 }
 
 function showEditModal(user: ApiUserResponse) {
-  editingUser.value = user;
+  editingUser.value = user
   userForm.value = {
     email: user.email || '',
     password: '',
@@ -184,13 +208,13 @@ function showEditModal(user: ApiUserResponse) {
     last_name: user.last_name || '',
     role: (user.role as ApiAdminCreateUserRequestRole) || ApiAdminCreateUserRequestRole.customer,
     active: user.active ?? true,
-  };
-  showModal.value = true;
+  }
+  showModal.value = true
 }
 
 function closeModal() {
-  showModal.value = false;
-  editingUser.value = null;
+  showModal.value = false
+  editingUser.value = null
 }
 
 async function handleSave() {
@@ -203,7 +227,7 @@ async function handleSave() {
           last_name: userForm.value.last_name,
           active: userForm.value.active,
         },
-      });
+      })
     } else {
       await createMutation.mutateAsync({
         data: {
@@ -214,34 +238,34 @@ async function handleSave() {
           role: userForm.value.role,
           active: userForm.value.active,
         },
-      });
+      })
     }
-    await refetch();
-    closeModal();
+    await refetch()
+    closeModal()
   } catch (error) {
-    console.error('Failed to save user:', error);
-    alert('Failed to save user. Please try again.');
+    console.error('Failed to save user:', error)
+    alert('Failed to save user. Please try again.')
   }
 }
 
 async function handleDelete(userId: string) {
-  if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+  if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return
 
   try {
-    await deleteMutation.mutateAsync({ userID: userId });
-    await refetch();
+    await deleteMutation.mutateAsync({ userID: userId })
+    await refetch()
   } catch (error) {
-    console.error('Failed to delete user:', error);
-    alert('Failed to delete user. Please try again.');
+    console.error('Failed to delete user:', error)
+    alert('Failed to delete user. Please try again.')
   }
 }
 
 function formatDate(dateString?: string): string {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/A'
   try {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString()
   } catch {
-    return dateString;
+    return dateString
   }
 }
 </script>

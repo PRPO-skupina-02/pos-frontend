@@ -30,11 +30,17 @@
           </div>
           <div v-if="isAdmin" class="card-footer bg-transparent border-top-0 pt-0">
             <div class="d-flex gap-2">
-              <button class="btn btn-sm btn-outline-primary flex-fill" @click.stop="showEditModal(theater)">
+              <button
+                class="btn btn-sm btn-outline-primary flex-fill"
+                @click.stop="showEditModal(theater)"
+              >
                 Edit
               </button>
-              <button class="btn btn-sm btn-outline-danger flex-fill" @click.stop="handleDelete(theater.id!)"
-                :disabled="deleteMutation.isPending.value">
+              <button
+                class="btn btn-sm btn-outline-danger flex-fill"
+                @click.stop="handleDelete(theater.id!)"
+                :disabled="deleteMutation.isPending.value"
+              >
                 Delete
               </button>
             </div>
@@ -54,14 +60,25 @@
             <form @submit.prevent="handleSave">
               <div class="mb-3">
                 <label class="form-label">Name</label>
-                <input v-model="theaterForm.name" type="text" class="form-control" required minlength="3" />
+                <input
+                  v-model="theaterForm.name"
+                  type="text"
+                  class="form-control"
+                  required
+                  minlength="3"
+                />
               </div>
               <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-                <button type="submit" class="btn btn-primary"
-                  :disabled="createMutation.isPending.value || updateMutation.isPending.value">
-                  <span v-if="createMutation.isPending.value || updateMutation.isPending.value"
-                    class="spinner-border spinner-border-sm me-1"></span>
+                <button
+                  type="submit"
+                  class="btn btn-primary"
+                  :disabled="createMutation.isPending.value || updateMutation.isPending.value"
+                >
+                  <span
+                    v-if="createMutation.isPending.value || updateMutation.isPending.value"
+                    class="spinner-border spinner-border-sm me-1"
+                  ></span>
                   {{ editingTheater ? 'Save' : 'Create' }}
                 </button>
               </div>
@@ -76,54 +93,54 @@
 </template>
 
 <script setup lang="ts">
-import type { ApiTheaterResponse } from '@/api/spored/model';
+import type { ApiTheaterResponse } from '@/api/spored/model'
 import {
   useTheatersCreate,
   useTheatersDelete,
   useTheatersList,
   useTheatersUpdate,
-} from '@/api/spored/theaters/theaters';
-import { useAuth } from '@/composables/useAuth';
-import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+} from '@/api/spored/theaters/theaters'
+import { useAuth } from '@/composables/useAuth'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-const router = useRouter();
-const { isAdmin } = useAuth();
+const router = useRouter()
+const { isAdmin } = useAuth()
 
-const { data, isLoading, error, refetch } = useTheatersList();
+const { data, isLoading, error, refetch } = useTheatersList()
 
 const theaters = computed(() => {
-  const response = data.value?.data;
-  return response || [];
-});
+  const response = data.value?.data
+  return response || []
+})
 
-const createMutation = useTheatersCreate();
-const updateMutation = useTheatersUpdate();
-const deleteMutation = useTheatersDelete();
+const createMutation = useTheatersCreate()
+const updateMutation = useTheatersUpdate()
+const deleteMutation = useTheatersDelete()
 
-const showModal = ref(false);
-const editingTheater = ref<ApiTheaterResponse | null>(null);
-const theaterForm = ref({ name: '' });
+const showModal = ref(false)
+const editingTheater = ref<ApiTheaterResponse | null>(null)
+const theaterForm = ref({ name: '' })
 
 function selectTheater(theaterId: string) {
-  router.push({ name: 'rooms', params: { theaterId } });
+  router.push({ name: 'rooms', params: { theaterId } })
 }
 
 function showCreateModal() {
-  editingTheater.value = null;
-  theaterForm.value = { name: '' };
-  showModal.value = true;
+  editingTheater.value = null
+  theaterForm.value = { name: '' }
+  showModal.value = true
 }
 
 function showEditModal(theater: ApiTheaterResponse) {
-  editingTheater.value = theater;
-  theaterForm.value = { name: theater.name || '' };
-  showModal.value = true;
+  editingTheater.value = theater
+  theaterForm.value = { name: theater.name || '' }
+  showModal.value = true
 }
 
 function closeModal() {
-  showModal.value = false;
-  editingTheater.value = null;
+  showModal.value = false
+  editingTheater.value = null
 }
 
 async function handleSave() {
@@ -132,37 +149,37 @@ async function handleSave() {
       await updateMutation.mutateAsync({
         theaterID: editingTheater.value.id!,
         data: theaterForm.value,
-      });
+      })
     } else {
-      await createMutation.mutateAsync({ data: theaterForm.value });
+      await createMutation.mutateAsync({ data: theaterForm.value })
     }
-    await refetch();
-    closeModal();
+    await refetch()
+    closeModal()
   } catch (error) {
-    console.error('Failed to save theater:', error);
-    alert('Failed to save theater. Please try again.');
+    console.error('Failed to save theater:', error)
+    alert('Failed to save theater. Please try again.')
   }
 }
 
 async function handleDelete(theaterId: string) {
   if (!confirm('Are you sure you want to delete this theater? This action cannot be undone.'))
-    return;
+    return
 
   try {
-    await deleteMutation.mutateAsync({ theaterID: theaterId });
-    await refetch();
+    await deleteMutation.mutateAsync({ theaterID: theaterId })
+    await refetch()
   } catch (error) {
-    console.error('Failed to delete theater:', error);
-    alert('Failed to delete theater. Please try again.');
+    console.error('Failed to delete theater:', error)
+    alert('Failed to delete theater. Please try again.')
   }
 }
 
 function formatDate(dateString?: string): string {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/A'
   try {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString()
   } catch {
-    return dateString;
+    return dateString
   }
 }
 </script>

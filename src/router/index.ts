@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
+      path: '/advertising/:theaterId',
+      name: 'advertising',
+      component: () => import('../views/AdvertisingView.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
       path: '/',
       name: 'theaters',
       component: TheatersView,
