@@ -11,40 +11,61 @@ import { HttpResponse, delay, http } from 'msw'
 import type { RequestHandlerOptions } from 'msw'
 
 import { ModelsUserRole } from '.././model'
-import type { ApiUserResponse } from '.././model'
+import type { ApiUserResponse, UsersList200 } from '.././model'
 
-export const getUsersListResponseMock = (): ApiUserResponse[] =>
-  Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({
-    active: faker.helpers.arrayElement([faker.datatype.boolean(), undefined]),
-    created_at: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
+export const getUsersListResponseMock = (): UsersList200 => ({
+  ...{
+    data: faker.helpers.arrayElement([{}, undefined]),
+    limit: faker.helpers.arrayElement([
+      faker.number.int({ min: undefined, max: undefined }),
       undefined,
     ]),
-    email: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
+    offset: faker.helpers.arrayElement([
+      faker.number.int({ min: undefined, max: undefined }),
       undefined,
     ]),
-    first_name: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
+    total: faker.helpers.arrayElement([
+      faker.number.int({ min: undefined, max: undefined }),
       undefined,
     ]),
-    id: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
+  },
+  ...{
+    data: faker.helpers.arrayElement([
+      Array.from({ length: faker.number.int({ min: 1, max: 10 }) }, (_, i) => i + 1).map(() => ({
+        active: faker.helpers.arrayElement([faker.datatype.boolean(), undefined]),
+        created_at: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+        email: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+        first_name: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+        id: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+        last_name: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+        role: faker.helpers.arrayElement([
+          faker.helpers.arrayElement(Object.values(ModelsUserRole)),
+          undefined,
+        ]),
+        updated_at: faker.helpers.arrayElement([
+          faker.string.alpha({ length: { min: 10, max: 20 } }),
+          undefined,
+        ]),
+      })),
       undefined,
     ]),
-    last_name: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
-      undefined,
-    ]),
-    role: faker.helpers.arrayElement([
-      faker.helpers.arrayElement(Object.values(ModelsUserRole)),
-      undefined,
-    ]),
-    updated_at: faker.helpers.arrayElement([
-      faker.string.alpha({ length: { min: 10, max: 20 } }),
-      undefined,
-    ]),
-  }))
+  },
+})
 
 export const getAdminCreateUserResponseMock = (
   overrideResponse: Partial<ApiUserResponse> = {},
@@ -144,10 +165,10 @@ export const getUsersUpdateResponseMock = (
 
 export const getUsersListMockHandler = (
   overrideResponse?:
-    | ApiUserResponse[]
+    | UsersList200
     | ((
         info: Parameters<Parameters<typeof http.get>[1]>[0],
-      ) => Promise<ApiUserResponse[]> | ApiUserResponse[]),
+      ) => Promise<UsersList200> | UsersList200),
   options?: RequestHandlerOptions,
 ) => {
   return http.get(

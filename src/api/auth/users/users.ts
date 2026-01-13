@@ -26,6 +26,7 @@ import type {
   ApiAdminUpdateUserRequest,
   ApiUserResponse,
   MiddlewareHttpError,
+  UsersList200,
   UsersListParams,
 } from '.././model'
 
@@ -38,7 +39,7 @@ import { authMutator } from '../../auth-mutator'
 export const usersList = (params?: MaybeRef<UsersListParams>, signal?: AbortSignal) => {
   params = unref(params)
 
-  return authMutator<ApiUserResponse[]>({
+  return authMutator<UsersList200>({
     url: `/api/v1/auth/users`,
     method: 'GET',
     params: unref(params),

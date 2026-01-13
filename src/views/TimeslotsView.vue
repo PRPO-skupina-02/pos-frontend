@@ -26,8 +26,13 @@
               No timeslots available
             </div>
             <div v-else class="list-group list-group-flush">
-              <button v-for="timeslot in day.timeslots" :key="timeslot.id" type="button"
-                class="list-group-item list-group-item-action" @click="selectTimeslot(timeslot.id!)">
+              <button
+                v-for="timeslot in day.timeslots"
+                :key="timeslot.id"
+                type="button"
+                class="list-group-item list-group-item-action"
+                @click="selectTimeslot(timeslot.id!)"
+              >
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
                     <h6 class="mb-1">{{ getMovieName(timeslot.movie_id) }}</h6>
@@ -49,44 +54,44 @@
 </template>
 
 <script setup lang="ts">
-import type { ApiTimeSlotResponse } from '@/api/spored/model';
-import { useMoviesList } from '@/api/spored/movies/movies';
-import { useTimeSlotsList } from '@/api/spored/timeslots/timeslots';
-import { calculateDuration, formatTime } from '@/util/time';
-import { computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import type { ApiTimeSlotResponse } from '@/api/spored/model'
+import { useMoviesList } from '@/api/spored/movies/movies'
+import { useTimeSlotsList } from '@/api/spored/timeslots/timeslots'
+import { calculateDuration, formatTime } from '@/util/time'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-const route = useRoute();
-const router = useRouter();
+const route = useRoute()
+const router = useRouter()
 
-const theaterId = computed(() => route.params.theaterId as string);
-const roomId = computed(() => route.params.roomId as string);
+const theaterId = computed(() => route.params.theaterId as string)
+const roomId = computed(() => route.params.roomId as string)
 
 // Calculate the three dates
-const today = new Date();
-const tomorrow = new Date();
-tomorrow.setDate(today.getDate() + 1);
-const dayAfterTomorrow = new Date();
-dayAfterTomorrow.setDate(today.getDate() + 2);
+const today = new Date()
+const tomorrow = new Date()
+tomorrow.setDate(today.getDate() + 1)
+const dayAfterTomorrow = new Date()
+dayAfterTomorrow.setDate(today.getDate() + 2)
 
-const todayString = today.toISOString().split('T')[0];
-const tomorrowString = tomorrow.toISOString().split('T')[0];
-const dayAfterTomorrowString = dayAfterTomorrow.toISOString().split('T')[0];
+const todayString = today.toISOString().split('T')[0]
+const tomorrowString = tomorrow.toISOString().split('T')[0]
+const dayAfterTomorrowString = dayAfterTomorrow.toISOString().split('T')[0]
 
 // Fetch timeslots for each day
-const todayQuery = useTimeSlotsList(theaterId, roomId, { date: todayString, limit: 50 });
-const tomorrowQuery = useTimeSlotsList(theaterId, roomId, { date: tomorrowString, limit: 50 });
+const todayQuery = useTimeSlotsList(theaterId, roomId, { date: todayString, limit: 50 })
+const tomorrowQuery = useTimeSlotsList(theaterId, roomId, { date: tomorrowString, limit: 50 })
 const dayAfterQuery = useTimeSlotsList(theaterId, roomId, {
   date: dayAfterTomorrowString,
   limit: 50,
-});
+})
 
-const movieQuery = useMoviesList();
+const movieQuery = useMoviesList()
 
 const movies = computed(() => {
-  const response = movieQuery.data.value?.data;
-  return response || [];
-});
+  const response = movieQuery.data.value?.data
+  return response || []
+})
 
 const isLoadingAny = computed(() => {
   return (
@@ -94,8 +99,8 @@ const isLoadingAny = computed(() => {
     tomorrowQuery.isLoading.value ||
     dayAfterQuery.isLoading.value ||
     movieQuery.isLoading.value
-  );
-});
+  )
+})
 
 const days = computed(() => [
   {
@@ -116,12 +121,12 @@ const days = computed(() => [
     timeslots: (dayAfterQuery.data.value?.data || []) as ApiTimeSlotResponse[],
     error: dayAfterQuery.error.value,
   },
-]);
+])
 
 function getMovieName(movieId?: string): string {
-  if (!movieId) return 'Unknown Movie';
-  const movie = movies.value.find((m) => m.id === movieId);
-  return movie?.name || `Movie ID: ${movieId.substring(0, 8)}`;
+  if (!movieId) return 'Unknown Movie'
+  const movie = movies.value.find((m) => m.id === movieId)
+  return movie?.name || `Movie ID: ${movieId.substring(0, 8)}`
 }
 
 function selectTimeslot(timeslotId: string) {
@@ -132,6 +137,6 @@ function selectTimeslot(timeslotId: string) {
       roomId: roomId.value,
       timeslotId,
     },
-  });
+  })
 }
 </script>

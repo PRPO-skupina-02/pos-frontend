@@ -1,6 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import TheatersView from '../views/TheatersView.vue'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    requiresAdmin?: boolean
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -40,17 +47,35 @@ const router = createRouter({
       component: () => import('../views/PurchasesView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/movies',
+      name: 'movies',
+      component: () => import('../views/MoviesView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: () => import('../views/UsersView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('auth_token')
   const requiresAuth = to.meta.requiresAuth !== false
+  const requiresAdmin = to.meta.requiresAdmin === true
 
   if (requiresAuth && !token) {
     next({ name: 'login' })
   } else if (to.name === 'login' && token) {
     next({ name: 'theaters' })
+  } else if (requiresAdmin) {
+    // For admin routes, we need to check the user's role
+    // We'll rely on the API to enforce this and show an error if unauthorized
+    // The navbar will only show these links to admins anyway
+    next()
   } else {
     next()
   }

@@ -1,7 +1,7 @@
-import { useGetCurrentUser, useLogin } from '@/api/auth/auth/auth';
-import { ModelsUserRole, type ApiUserResponse } from '@/api/auth/model';
-import { computed, ref, watchEffect } from 'vue';
-import { useRouter } from 'vue-router';
+import { useGetCurrentUser, useLogin } from '@/api/auth/auth/auth'
+import { ModelsUserRole, type ApiUserResponse } from '@/api/auth/model'
+import { computed, ref, watchEffect } from 'vue'
+import { useRouter } from 'vue-router'
 
 const TOKEN_KEY = 'auth_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'

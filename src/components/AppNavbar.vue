@@ -3,24 +3,44 @@
     <div class="container-fluid">
       <router-link to="/" class="navbar-brand">CineCore POS</router-link>
 
-      <div v-if="navigationState" class="navbar-text text-light d-none d-lg-block me-auto">
-        <span v-if="navigationState.theater" class="me-2">
-          <span class="badge bg-secondary ms-1">{{ navigationState.theater }}</span>
-        </span>
-        <span v-if="navigationState.room" class="me-2">
-          <span class="badge bg-secondary ms-1">{{ navigationState.room }}</span>
-        </span>
-        <span v-if="navigationState.timeslot">
-          <span class="badge bg-secondary ms-1">{{ navigationState.timeslot }}</span>
-        </span>
-      </div>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
 
-      <div v-if="isAuthenticated" class="d-flex align-items-center">
-        <span class="text-light me-3">
-          <small>{{ user?.first_name || user?.email }}</small>
-          <span class="badge bg-primary ms-1">{{ user?.role }}</span>
-        </span>
-        <button class="btn btn-outline-light btn-sm" @click="logout">Logout</button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul v-if="isAdmin" class="navbar-nav me-auto">
+          <li class="nav-item">
+            <router-link to="/movies" class="nav-link">Movies</router-link>
+          </li>
+          <li class="nav-item">
+            <router-link to="/users" class="nav-link">Users</router-link>
+          </li>
+        </ul>
+
+        <div v-if="navigationState" class="navbar-text text-light d-none d-lg-block me-auto">
+          <span v-if="navigationState.theater" class="me-2">
+            <span class="badge bg-secondary ms-1">{{ navigationState.theater }}</span>
+          </span>
+          <span v-if="navigationState.room" class="me-2">
+            <span class="badge bg-secondary ms-1">{{ navigationState.room }}</span>
+          </span>
+          <span v-if="navigationState.timeslot">
+            <span class="badge bg-secondary ms-1">{{ navigationState.timeslot }}</span>
+          </span>
+        </div>
+
+        <div v-if="isAuthenticated" class="d-flex align-items-center ms-auto">
+          <span class="text-light me-3">
+            <small>{{ user?.first_name || user?.email }}</small>
+            <span class="badge isAdmin, bg-primary ms-1">{{ user?.role }}</span>
+          </span>
+          <button class="btn btn-outline-light btn-sm" @click="logout">Logout</button>
+        </div>
       </div>
     </div>
   </nav>
@@ -37,7 +57,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const { user, isAuthenticated, logout } = useAuth()
+const { user, isAuthenticated, isAdmin, logout } = useAuth()
 
 const theaterId = computed(() => route.params.theaterId as string | undefined)
 const roomId = computed(() => route.params.roomId as string | undefined)
