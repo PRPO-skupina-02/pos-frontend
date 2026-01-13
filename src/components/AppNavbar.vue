@@ -14,48 +14,58 @@
           <span class="badge bg-secondary ms-1">{{ navigationState.timeslot }}</span>
         </span>
       </div>
+
+      <div v-if="isAuthenticated" class="d-flex align-items-center">
+        <span class="text-light me-3">
+          <small>{{ user?.first_name || user?.email }}</small>
+          <span class="badge bg-primary ms-1">{{ user?.role }}</span>
+        </span>
+        <button class="btn btn-outline-light btn-sm" @click="logout">Logout</button>
+      </div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { roomsShow } from '@/api/spored/rooms/rooms';
-import { theatersShow } from '@/api/spored/theaters/theaters';
-import { timeSlotsShow } from '@/api/spored/timeslots/timeslots';
-import { formatTime } from '@/util/time';
-import { useQuery } from '@tanstack/vue-query';
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { roomsShow } from '@/api/spored/rooms/rooms'
+import { theatersShow } from '@/api/spored/theaters/theaters'
+import { timeSlotsShow } from '@/api/spored/timeslots/timeslots'
+import { useAuth } from '@/composables/useAuth'
+import { formatTime } from '@/util/time'
+import { useQuery } from '@tanstack/vue-query'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 
-const route = useRoute();
+const route = useRoute()
+const { user, isAuthenticated, logout } = useAuth()
 
-const theaterId = computed(() => route.params.theaterId as string | undefined);
-const roomId = computed(() => route.params.roomId as string | undefined);
-const timeslotId = computed(() => route.params.timeslotId as string | undefined);
+const theaterId = computed(() => route.params.theaterId as string | undefined)
+const roomId = computed(() => route.params.roomId as string | undefined)
+const timeslotId = computed(() => route.params.timeslotId as string | undefined)
 
 const { data: theaterData } = useQuery({
   queryKey: ['theater', theaterId],
   queryFn: () => theatersShow(theaterId.value!),
   enabled: computed(() => !!theaterId.value),
-});
+})
 
 const { data: roomData } = useQuery({
   queryKey: ['room', theaterId, roomId],
   queryFn: () => roomsShow(theaterId.value!, roomId.value!),
   enabled: computed(() => !!(theaterId.value && roomId.value)),
-});
+})
 
 const { data: timeslotData } = useQuery({
   queryKey: ['timeslot', theaterId, roomId, timeslotId],
   queryFn: () => timeSlotsShow(theaterId.value!, roomId.value!, timeslotId.value!),
   enabled: computed(() => !!(theaterId.value && roomId.value && timeslotId.value)),
-});
+})
 
 const navigationState = computed(() => {
   return {
     theater: theaterId.value ? theaterData.value?.name : undefined,
     room: roomId.value ? roomData.value?.name : undefined,
     timeslot: timeslotId.value ? formatTime(timeslotData.value?.start_time || '') : undefined,
-  };
-});
+  }
+})
 </script>
