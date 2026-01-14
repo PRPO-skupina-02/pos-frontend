@@ -4,15 +4,14 @@ metadata:
   name: pos-frontend
   namespace: production
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     kubernetes.io/ingress.class: "gce"
 spec:
   tls:
   - hosts:
-    - pos-frontend.prpo.timhrovat.com
+    - pos-frontend.cinecore.timhrovat.com
     secretName: pos-frontend-tls
   rules:
-  - host: pos-frontend.prpo.timhrovat.com
+  - host: pos-frontend.cinecore.timhrovat.com
     http:
       paths:
       - path: /
